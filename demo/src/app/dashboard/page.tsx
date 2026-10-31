@@ -7,11 +7,6 @@ import { formatPhoneNumber } from '@/lib/utils';
 import { mockUser, mockBusiness, mockBookings, mockConversations, mockSubscription } from '@/data/mock-data';
 
 export default function DashboardPage() {
-  const getHref = (href: string) => {
-    const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
-    return `${basePath}${href}`;
-  };
-
   const upcomingBookings = mockBookings
     .filter(b => b.status === 'CONFIRMED' && new Date(b.startTime) > new Date())
     .slice(0, 5);
@@ -78,7 +73,7 @@ export default function DashboardPage() {
                 Upcoming Bookings
               </h2>
               <Link
-                href={getHref('/dashboard/bookings')}
+                href="/dashboard/bookings"
                 className="text-sm text-blue-600 hover:underline"
               >
                 View all
@@ -125,7 +120,7 @@ export default function DashboardPage() {
                 Recent Conversations
               </h2>
               <Link
-                href={getHref('/dashboard/conversations')}
+                href="/dashboard/conversations"
                 className="text-sm text-blue-600 hover:underline"
               >
                 View all
@@ -140,7 +135,7 @@ export default function DashboardPage() {
                 {recentConversations.map((convo) => (
                   <Link
                     key={convo.id}
-                    href={getHref(`/dashboard/conversations?id=${convo.id}`)}
+                    href={`/dashboard/conversations?id=${convo.id}`}
                     className="block py-2 border-b border-gray-100 last:border-0 hover:bg-gray-50 -mx-2 px-2 rounded"
                   >
                     <div className="flex justify-between items-start">

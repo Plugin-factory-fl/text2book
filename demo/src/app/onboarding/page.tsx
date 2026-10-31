@@ -67,11 +67,6 @@ export default function OnboardingPage() {
 
   const currentStepIndex = STEPS.findIndex((s) => s.key === currentStep);
 
-  const getHref = (href: string) => {
-    const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
-    return `${basePath}${href}`;
-  };
-
   const simulateLoading = (nextStep: Step) => {
     setIsLoading(true);
     setTimeout(() => {
@@ -473,7 +468,7 @@ export default function OnboardingPage() {
                     Just send a message like &quot;I would like to book a haircut&quot; and my assistant will help you find a time!
                   </p>
                 </div>
-                <Link href={getHref('/dashboard')}>
+                <Link href="/dashboard">
                   <Button size="lg" className="w-full">
                     Go to Dashboard
                   </Button>
@@ -484,7 +479,7 @@ export default function OnboardingPage() {
         </Card>
 
         <div className="mt-8 text-center">
-          <Link href={getHref('/')} className="text-sm text-gray-500 hover:text-gray-700">
+          <Link href="/" className="text-sm text-gray-500 hover:text-gray-700">
             ← Back to Demo Home
           </Link>
         </div>
