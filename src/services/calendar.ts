@@ -305,3 +305,134 @@ export function formatSlotForDisplay(slot: TimeSlot, timezone: string): string {
   const zonedStart = toZonedTime(slot.start, timezone);
   return format(zonedStart, 'h:mm a');
 }
+
+export async function getCalendarEvent(
+  businessId: string,
+  eventId: string
+): Promise<calendar_v3.Schema$Event | null> {
+  const calendar = await getCalendarClient(businessId);
+  if (!calendar) return null;
+
+  const connection = await prisma.calendarConnection.findUnique({
+    where: { businessId },
+  });
+
+  const calendarId = connection?.calendarId || 'primary';
+
+  try {
+    const response = await calendar.events.get({
+      calendarId,
+      eventId,
+    });
+    return response.data;
+  } catch (error: unknown) {
+    const err = error as { code?: number };
+    if (err.code === 404) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+export async function syncBookingsWithCalendar(businessId: string): Promise<{
+  cancelled: number;
+  updated: number;
+}> {
+  const bookings = await prisma.booking.findMany({
+    where: {
+      businessId,
+      calendarEventId: { not: null },
+      status: 'CONFIRMED',
+      startTime: { gte: new Date() },
+    },
+  });
+
+  let cancelled = 0;
+  let updated = 0;
+
+  for (const booking of bookings) {
+    if (!booking.calendarEventId) continue;
+
+    try {
+      const event = await getCalendarEvent(businessId, booking.calendarEventId);
+
+      if (!event) {
+        await prisma.booking.update({
+          where: { id: booking.id },
+          data: { 
+            status: 'CANCELLED',
+            notes: 'Cancelled: Calendar event was deleted',
+            calendarEventId: null,
+          },
+        });
+        await prisma.scheduledReminder.deleteMany({
+          where: { bookingId: booking.id, sent: false },
+        });
+        cancelled++;
+        continue;
+      }
+
+      if (event.status === 'cancelled') {
+        await prisma.booking.update({
+          where: { id: booking.id },
+          data: { 
+            status: 'CANCELLED',
+            notes: 'Cancelled: Calendar event was cancelled',
+            calendarEventId: null,
+          },
+        });
+        await prisma.scheduledReminder.deleteMany({
+          where: { bookingId: booking.id, sent: false },
+        });
+        cancelled++;
+        continue;
+      }
+
+      const eventStart = event.start?.dateTime ? new Date(event.start.dateTime) : null;
+      const eventEnd = event.end?.dateTime ? new Date(event.end.dateTime) : null;
+
+      if (eventStart && eventEnd) {
+        const bookingStartTime = booking.startTime.getTime();
+        const bookingEndTime = booking.endTime.getTime();
+        const eventStartTime = eventStart.getTime();
+        const eventEndTime = eventEnd.getTime();
+
+        if (bookingStartTime !== eventStartTime || bookingEndTime !== eventEndTime) {
+          await prisma.booking.update({
+            where: { id: booking.id },
+            data: {
+              startTime: eventStart,
+              endTime: eventEnd,
+            },
+          });
+
+          await prisma.scheduledReminder.deleteMany({
+            where: { bookingId: booking.id, sent: false },
+          });
+
+          const business = await prisma.business.findUnique({
+            where: { id: businessId },
+          });
+
+          const reminderHours = business?.reminderHoursBefore || 24;
+          const reminderTime = new Date(eventStart.getTime() - reminderHours * 60 * 60 * 1000);
+
+          if (reminderTime > new Date()) {
+            await prisma.scheduledReminder.create({
+              data: {
+                bookingId: booking.id,
+                sendAt: reminderTime,
+              },
+            });
+          }
+
+          updated++;
+        }
+      }
+    } catch (error) {
+      console.error(`Failed to sync booking ${booking.id}:`, error);
+    }
+  }
+
+  return { cancelled, updated };
+}

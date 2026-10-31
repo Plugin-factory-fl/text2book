@@ -201,8 +201,16 @@ export const BOOKING_FUNCTIONS = [
     },
   },
   {
+    name: 'get_upcoming_booking',
+    description: 'Get the upcoming booking for this client to check what they have scheduled',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
     name: 'cancel_booking',
-    description: 'Cancel an existing booking for the client',
+    description: 'Cancel the upcoming booking for this client. Use after confirming with the client they want to cancel.',
     parameters: {
       type: 'object',
       properties: {
@@ -211,6 +219,20 @@ export const BOOKING_FUNCTIONS = [
           description: 'Optional reason for cancellation',
         },
       },
+    },
+  },
+  {
+    name: 'reschedule_booking',
+    description: 'Reschedule the upcoming booking for this client to a new time. First check availability, then reschedule.',
+    parameters: {
+      type: 'object',
+      properties: {
+        new_start_time: {
+          type: 'string',
+          description: 'The new appointment start time in ISO format',
+        },
+      },
+      required: ['new_start_time'],
     },
   },
   {

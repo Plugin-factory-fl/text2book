@@ -1,6 +1,6 @@
 import prisma from '@/lib/prisma';
 import { addMinutes } from 'date-fns';
-import { isSlotAvailable, createCalendarEvent } from './calendar';
+import { isSlotAvailable, createCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from './calendar';
 import { sendSms } from './twilio';
 import { format } from 'date-fns';
 
@@ -207,11 +207,20 @@ export async function cancelBooking(
     return { success: false, error: 'Booking is already cancelled' };
   }
 
+  if (booking.calendarEventId) {
+    try {
+      await deleteCalendarEvent(booking.businessId, booking.calendarEventId);
+    } catch (error) {
+      console.error('Failed to delete calendar event:', error);
+    }
+  }
+
   await prisma.booking.update({
     where: { id: bookingId },
     data: {
       status: 'CANCELLED',
       notes: reason ? `Cancelled: ${reason}` : booking.notes,
+      calendarEventId: null,
     },
   });
 
@@ -285,6 +294,17 @@ export async function rescheduleBooking(
 
   const oldStartTime = booking.startTime;
 
+  if (booking.calendarEventId) {
+    try {
+      await updateCalendarEvent(booking.businessId, booking.calendarEventId, {
+        startTime: newStartTime,
+        endTime: newEndTime,
+      });
+    } catch (error) {
+      console.error('Failed to update calendar event:', error);
+    }
+  }
+
   await prisma.booking.update({
     where: { id: bookingId },
     data: {
@@ -332,4 +352,75 @@ export async function rescheduleBooking(
       endTime: newEndTime,
     },
   };
+}
+
+export async function findUpcomingBookingByClientPhone(
+  businessId: string,
+  clientPhone: string
+): Promise<{
+  id: string;
+  serviceName: string;
+  startTime: Date;
+  endTime: Date;
+  calendarEventId: string | null;
+} | null> {
+  const booking = await prisma.booking.findFirst({
+    where: {
+      businessId,
+      clientPhone,
+      status: 'CONFIRMED',
+      startTime: { gte: new Date() },
+    },
+    orderBy: { startTime: 'asc' },
+  });
+
+  if (!booking) return null;
+
+  return {
+    id: booking.id,
+    serviceName: booking.serviceName,
+    startTime: booking.startTime,
+    endTime: booking.endTime,
+    calendarEventId: booking.calendarEventId,
+  };
+}
+
+export async function cancelBookingByClientPhone(
+  businessId: string,
+  clientPhone: string,
+  reason?: string
+): Promise<{ success: boolean; error?: string; booking?: { serviceName: string; startTime: Date } }> {
+  const booking = await findUpcomingBookingByClientPhone(businessId, clientPhone);
+  
+  if (!booking) {
+    return { success: false, error: 'No upcoming booking found for this phone number' };
+  }
+
+  const result = await cancelBooking(booking.id, reason);
+  
+  if (result.success) {
+    return {
+      success: true,
+      booking: {
+        serviceName: booking.serviceName,
+        startTime: booking.startTime,
+      },
+    };
+  }
+
+  return result;
+}
+
+export async function rescheduleBookingByClientPhone(
+  businessId: string,
+  clientPhone: string,
+  newStartTime: Date
+): Promise<BookingResult> {
+  const booking = await findUpcomingBookingByClientPhone(businessId, clientPhone);
+  
+  if (!booking) {
+    return { success: false, error: 'No upcoming booking found for this phone number' };
+  }
+
+  return rescheduleBooking(booking.id, newStartTime);
 }

@@ -10,7 +10,7 @@ import {
   MessageHistory,
 } from '@/prompts/booking-assistant';
 import { getAvailableSlots, formatSlotForDisplay, TimeSlot } from './calendar';
-import { createBooking } from './booking';
+import { createBooking, cancelBookingByClientPhone, rescheduleBookingByClientPhone, findUpcomingBookingByClientPhone } from './booking';
 import { format, parse, addDays, startOfDay, parseISO } from 'date-fns';
 import { ConversationState } from '@prisma/client';
 
@@ -279,8 +279,65 @@ async function generateAIResponse(
         break;
       }
 
+      case 'get_upcoming_booking': {
+        const upcomingBooking = await findUpcomingBookingByClientPhone(
+          businessContext.business.id,
+          conversationContext.clientPhone
+        );
+
+        if (upcomingBooking) {
+          functionResult = `Upcoming booking found: ${upcomingBooking.serviceName} on ${format(upcomingBooking.startTime, 'EEEE, MMMM d')} at ${format(upcomingBooking.startTime, 'h:mm a')}.`;
+          updatedContext.pendingBooking = {
+            serviceId: '',
+            serviceName: upcomingBooking.serviceName,
+            startTime: format(upcomingBooking.startTime, 'EEEE, MMMM d') + ' at ' + format(upcomingBooking.startTime, 'h:mm a'),
+            endTime: upcomingBooking.endTime.toISOString(),
+            duration: Math.round((upcomingBooking.endTime.getTime() - upcomingBooking.startTime.getTime()) / 60000),
+          };
+        } else {
+          functionResult = 'No upcoming booking found for this phone number.';
+        }
+        break;
+      }
+
       case 'cancel_booking': {
-        functionResult = 'I will have the owner help you with cancellations. They will get back to you shortly.';
+        const { reason } = functionArgs;
+        const cancelResult = await cancelBookingByClientPhone(
+          businessContext.business.id,
+          conversationContext.clientPhone,
+          reason
+        );
+
+        if (cancelResult.success && cancelResult.booking) {
+          functionResult = `Booking cancelled: ${cancelResult.booking.serviceName} on ${format(cancelResult.booking.startTime, 'EEEE, MMMM d')} at ${format(cancelResult.booking.startTime, 'h:mm a')} has been cancelled.`;
+          updatedContext.pendingBooking = undefined;
+        } else {
+          functionResult = cancelResult.error || 'Could not cancel booking. You may not have an upcoming appointment.';
+        }
+        break;
+      }
+
+      case 'reschedule_booking': {
+        const { new_start_time } = functionArgs;
+        let newStartTime: Date;
+        try {
+          newStartTime = parseISO(new_start_time);
+        } catch {
+          newStartTime = parseFuzzyDate(new_start_time);
+        }
+
+        const rescheduleResult = await rescheduleBookingByClientPhone(
+          businessContext.business.id,
+          conversationContext.clientPhone,
+          newStartTime
+        );
+
+        if (rescheduleResult.success && rescheduleResult.booking) {
+          functionResult = `Booking rescheduled! Your ${rescheduleResult.booking.serviceName} is now on ${format(rescheduleResult.booking.startTime, 'EEEE, MMMM d')} at ${format(rescheduleResult.booking.startTime, 'h:mm a')}.`;
+          updatedContext.pendingBooking = undefined;
+        } else {
+          functionResult = rescheduleResult.error || 'Could not reschedule booking. The new time may not be available.';
+        }
         break;
       }
 

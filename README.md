@@ -34,7 +34,17 @@ Text2Book is a self serve SaaS for solo appointment based service providers (hai
   - Twilio webhook handler
   - Automatic booking confirmations
   - Scheduled reminder texts
-  - SMS cap per month (soft limit)
+  - SMS cap enforcement with owner notification
+  - Graceful degradation when cap reached (fallback message to clients)
+- **Reschedule and Cancel via SMS**:
+  - Natural language reschedule requests
+  - Natural language cancel requests
+  - Google Calendar event updates on reschedule
+  - Google Calendar event deletion on cancel
+- **Two Way Calendar Sync**:
+  - Hourly sync job detects changes in Google Calendar
+  - Auto cancels bookings if calendar event is deleted
+  - Handles calendar event time changes
 - **Dashboard**:
   - Overview with upcoming bookings and recent conversations
   - Bookings management (view, cancel, complete)
@@ -54,9 +64,6 @@ Text2Book is a self serve SaaS for solo appointment based service providers (hai
 
 ### Stubbed/Partial
 
-- SMS cap enforcement (tracking implemented, hard block not enforced)
-- Calendar event updates/deletions on booking changes
-- Rescheduling flow in AI conversation (basic support)
 - Advanced date parsing (works for common formats)
 - Error recovery in AI conversation
 
@@ -125,10 +132,7 @@ CRON_SECRET="your-cron-secret"
    - Set redirect URI to `{APP_URL}/api/calendar/callback`
    - Enable Google Calendar API
 3. **OpenAI**: Get API key from platform.openai.com
-4. **Stripe**: 
-   - Get keys from Stripe Dashboard
-   - Create a $19.99/month recurring price
-   - Set up webhook endpoint at `{APP_URL}/api/webhooks/stripe`
+4. **Stripe**: See [Stripe Setup](#stripe-setup) below for detailed instructions
 
 ## Local Development
 
@@ -198,14 +202,46 @@ npm run db:studio    # Open Prisma Studio
 
 ## Deployment
 
-### Render
+### Render (Blueprint)
+
+The easiest way to deploy is with the included `render.yaml` Blueprint:
+
+1. Fork or push this repo to GitHub
+2. In the Render Dashboard, click **New > Blueprint**
+3. Connect your repository and select the branch
+4. Render will detect `render.yaml` and create:
+   - `text2book-web` - Main Next.js application
+   - `text2book-db` - PostgreSQL database
+   - `text2book-reminders-cron` - Cron job for reminders (every 15 min)
+   - `text2book-calendar-sync-cron` - Cron job for calendar sync (hourly)
+5. Configure environment variables (marked `sync: false` in Blueprint):
+   - `NEXTAUTH_URL` - Your Render service URL (e.g., `https://text2book-web.onrender.com`)
+   - `NEXTAUTH_SECRET` - Generate with `openssl rand -base64 32`
+   - `TWILIO_ACCOUNT_SID` - From Twilio Console
+   - `TWILIO_AUTH_TOKEN` - From Twilio Console
+   - `GOOGLE_CLIENT_ID` - From Google Cloud Console
+   - `GOOGLE_CLIENT_SECRET` - From Google Cloud Console
+   - `OPENAI_API_KEY` - From OpenAI Platform
+   - `STRIPE_SECRET_KEY` - From Stripe Dashboard
+   - `STRIPE_PUBLISHABLE_KEY` - From Stripe Dashboard
+   - `STRIPE_WEBHOOK_SECRET` - From Stripe webhook endpoint (see below)
+   - `STRIPE_PRICE_ID` - Your Text2Book price ID (see below)
+   - `APP_URL` - Same as `NEXTAUTH_URL`
+   - `CRON_SECRET` - Generate with `openssl rand -base64 32`
+6. Deploy
+
+### Manual Render Setup
+
+If you prefer manual setup over the Blueprint:
 
 1. Create a new Web Service from the repository
 2. Set build command: `npm install && npm run db:generate && npm run build`
 3. Set start command: `npm start`
 4. Add all environment variables
 5. Create a PostgreSQL database and link it
-6. Set up a Cron Job for `/api/cron/reminders` (every 15 minutes)
+6. Set up Cron Jobs:
+   - Reminders: `curl -X POST -H "Authorization: Bearer $CRON_SECRET" $APP_URL/api/cron/reminders` (every 15 min)
+   - Calendar sync: `curl -X POST -H "Authorization: Bearer $CRON_SECRET" $APP_URL/api/cron/calendar-sync` (hourly)
 
 ### Environment Notes
 
@@ -248,6 +284,88 @@ npm run db:studio    # Open Prisma Studio
 ### Cron
 
 - `GET/POST /api/cron/reminders` - Process scheduled reminders
+- `GET/POST /api/cron/calendar-sync` - Sync bookings with Google Calendar
+
+## Stripe Setup
+
+Text2Book uses Stripe for subscription billing ($19.99/month with 7 day free trial). Follow these steps to set up Stripe:
+
+### 1. Create the Text2Book Product and Price
+
+In the [Stripe Dashboard](https://dashboard.stripe.com):
+
+1. Go to **Products** > **Add product**
+2. Create the product:
+   - **Name**: Text2Book Monthly Subscription
+   - **Description**: AI powered SMS booking assistant for your business
+3. Add a price:
+   - **Pricing model**: Standard pricing
+   - **Price**: $19.99
+   - **Billing period**: Monthly (recurring)
+4. Save the product
+5. Copy the **Price ID** (starts with `price_`) and set it as `STRIPE_PRICE_ID`
+
+### 2. Get API Keys
+
+1. Go to **Developers** > **API keys**
+2. Copy the **Publishable key** (starts with `pk_`) to `STRIPE_PUBLISHABLE_KEY`
+3. Copy the **Secret key** (starts with `sk_`) to `STRIPE_SECRET_KEY`
+
+For testing, use the test mode keys (toggle "Test mode" in the Dashboard).
+
+### 3. Create the Webhook Endpoint
+
+1. Go to **Developers** > **Webhooks**
+2. Click **Add endpoint**
+3. Set the endpoint URL: `https://your-domain.com/api/webhooks/stripe`
+4. Select events to listen for:
+   - `checkout.session.completed`
+   - `customer.subscription.created`
+   - `customer.subscription.updated`
+   - `customer.subscription.deleted`
+   - `invoice.payment_succeeded`
+   - `invoice.payment_failed`
+5. Click **Add endpoint**
+6. Copy the **Signing secret** (starts with `whsec_`) to `STRIPE_WEBHOOK_SECRET`
+
+### 4. Test Locally with Stripe CLI
+
+For local development, use the Stripe CLI to forward webhooks:
+
+```bash
+# Install Stripe CLI
+brew install stripe/stripe-cli/stripe
+
+# Login to your Stripe account
+stripe login
+
+# Forward webhooks to your local server
+stripe listen --forward-to localhost:3000/api/webhooks/stripe
+
+# The CLI will display a webhook signing secret - use it for local testing
+# (different from your production webhook secret)
+```
+
+### Webhook Events Handled
+
+| Event | Action |
+|-------|--------|
+| `checkout.session.completed` | Creates subscription record, activates account |
+| `customer.subscription.created` | Records new subscription |
+| `customer.subscription.updated` | Updates subscription status (active/canceled/past_due) |
+| `customer.subscription.deleted` | Marks subscription as canceled |
+| `invoice.payment_succeeded` | Updates subscription period dates |
+| `invoice.payment_failed` | Marks subscription as past_due |
+
+### Testing Subscriptions
+
+In test mode, use these test card numbers:
+
+- **Success**: `4242 4242 4242 4242`
+- **Requires authentication**: `4000 0025 0000 3155`
+- **Declined**: `4000 0000 0000 0002`
+
+Use any future expiration date and any 3 digit CVC.
 
 ## Architecture
 
