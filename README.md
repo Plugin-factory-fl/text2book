@@ -2,6 +2,10 @@
 
 Text2Book is a self serve SaaS for solo appointment based service providers (hair, nails, lashes, massage, trainers, groomers, tutors, detailers, cleaners). Each customer gets a dedicated Twilio phone number. Clients text it; an AI agent converses, checks real availability on the connected Google Calendar, books, sends confirmations and reminders, and answers FAQs.
 
+## Live Demo
+
+**[View the interactive demo](https://plugin-factory-fl.github.io/text2book/)** to explore the owner dashboard with sample data. No login required.
+
 ## Features
 
 ### Implemented (MVP)
