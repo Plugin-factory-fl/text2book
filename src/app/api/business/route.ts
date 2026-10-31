@@ -16,6 +16,10 @@ const businessSchema = z.object({
   timezone: z.string().optional(),
   cancellationPolicy: z.string().max(500).optional(),
   reminderHoursBefore: z.number().min(1).max(72).optional(),
+  depositsEnabled: z.boolean().optional(),
+  defaultDepositAmount: z.number().min(0).max(100000).optional().nullable(),
+  depositHoldMinutes: z.number().min(5).max(1440).optional(),
+  depositPolicyText: z.string().max(500).optional(),
 });
 
 export async function GET() {

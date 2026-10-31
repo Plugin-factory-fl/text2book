@@ -13,6 +13,12 @@ export const mockBusiness = {
   state: 'CA',
   timezone: 'America/Los_Angeles',
   reminderHoursBefore: 24,
+  depositsEnabled: true,
+  defaultDepositAmount: 2000,
+  depositHoldMinutes: 30,
+  depositPolicyText: 'The deposit is non-refundable on no-show and will be applied toward your service.',
+  stripeAccountId: 'acct_demo123',
+  stripeOnboardingComplete: true,
   phoneNumber: {
     phoneNumber: '+15551234567',
     monthlySmsSent: 127,
@@ -32,6 +38,7 @@ export const mockServices = [
     duration: 60,
     price: 65,
     isActive: true,
+    depositOverride: null,
   },
   {
     id: 'svc-2',
@@ -40,6 +47,7 @@ export const mockServices = [
     duration: 30,
     price: 35,
     isActive: true,
+    depositOverride: 0,
   },
   {
     id: 'svc-3',
@@ -48,6 +56,7 @@ export const mockServices = [
     duration: 120,
     price: 150,
     isActive: true,
+    depositOverride: 5000,
   },
   {
     id: 'svc-4',
@@ -56,6 +65,7 @@ export const mockServices = [
     duration: 150,
     price: 200,
     isActive: true,
+    depositOverride: 5000,
   },
   {
     id: 'svc-5',
@@ -64,6 +74,24 @@ export const mockServices = [
     duration: 45,
     price: 45,
     isActive: true,
+    depositOverride: null,
+  },
+];
+
+export const mockTrustedClients = [
+  {
+    id: 'tc-1',
+    phone: '+15559876543',
+    name: 'Emily Chen',
+    notes: 'Regular client, always pays on time',
+    createdAt: new Date(Date.now() - 86400000 * 30).toISOString(),
+  },
+  {
+    id: 'tc-2',
+    phone: '+15557654321',
+    name: 'Jessica Williams',
+    notes: null,
+    createdAt: new Date(Date.now() - 86400000 * 15).toISOString(),
   },
 ];
 
@@ -122,6 +150,9 @@ export const mockBookings = [
     notes: 'First time client, referred by Maria',
     confirmationSent: true,
     reminderSent: true,
+    depositRequired: false,
+    depositAmount: null,
+    depositStatus: 'NOT_REQUIRED',
   },
   {
     id: 'booking-2',
@@ -137,6 +168,9 @@ export const mockBookings = [
     notes: null,
     confirmationSent: true,
     reminderSent: true,
+    depositRequired: false,
+    depositAmount: null,
+    depositStatus: 'NOT_REQUIRED',
   },
   {
     id: 'booking-3',
@@ -152,6 +186,9 @@ export const mockBookings = [
     notes: 'Wants to go darker for winter',
     confirmationSent: true,
     reminderSent: false,
+    depositRequired: false,
+    depositAmount: null,
+    depositStatus: 'NOT_REQUIRED',
   },
   {
     id: 'booking-4',
@@ -167,6 +204,9 @@ export const mockBookings = [
     notes: null,
     confirmationSent: true,
     reminderSent: false,
+    depositRequired: true,
+    depositAmount: 5000,
+    depositStatus: 'PAID',
   },
   {
     id: 'booking-5',
@@ -182,6 +222,9 @@ export const mockBookings = [
     notes: null,
     confirmationSent: true,
     reminderSent: false,
+    depositRequired: false,
+    depositAmount: null,
+    depositStatus: 'NOT_REQUIRED',
   },
   {
     id: 'booking-6',
@@ -193,10 +236,13 @@ export const mockBookings = [
     price: 45,
     startTime: createDate(2, 11, 0).toISOString(),
     endTime: createDate(2, 11, 45).toISOString(),
-    status: 'CONFIRMED',
+    status: 'AWAITING_DEPOSIT',
     notes: null,
-    confirmationSent: true,
+    confirmationSent: false,
     reminderSent: false,
+    depositRequired: true,
+    depositAmount: 2000,
+    depositStatus: 'PENDING',
   },
   {
     id: 'booking-7',
@@ -212,6 +258,9 @@ export const mockBookings = [
     notes: 'Regular client',
     confirmationSent: true,
     reminderSent: false,
+    depositRequired: true,
+    depositAmount: 2000,
+    depositStatus: 'PAID',
   },
   {
     id: 'booking-8',
@@ -227,6 +276,9 @@ export const mockBookings = [
     notes: null,
     confirmationSent: true,
     reminderSent: false,
+    depositRequired: false,
+    depositAmount: null,
+    depositStatus: 'NOT_REQUIRED',
   },
   {
     id: 'booking-9',
@@ -242,6 +294,9 @@ export const mockBookings = [
     notes: 'Going red',
     confirmationSent: true,
     reminderSent: false,
+    depositRequired: true,
+    depositAmount: 5000,
+    depositStatus: 'PAID',
   },
   {
     id: 'booking-10',
@@ -257,6 +312,9 @@ export const mockBookings = [
     notes: null,
     confirmationSent: true,
     reminderSent: false,
+    depositRequired: false,
+    depositAmount: null,
+    depositStatus: 'NOT_REQUIRED',
   },
   {
     id: 'booking-11',
@@ -268,10 +326,13 @@ export const mockBookings = [
     price: 200,
     startTime: createDate(6, 11, 0).toISOString(),
     endTime: createDate(6, 13, 30).toISOString(),
-    status: 'CONFIRMED',
+    status: 'AWAITING_DEPOSIT',
     notes: 'Balayage style',
-    confirmationSent: true,
+    confirmationSent: false,
     reminderSent: false,
+    depositRequired: true,
+    depositAmount: 5000,
+    depositStatus: 'PENDING',
   },
   {
     id: 'booking-12',
@@ -287,6 +348,9 @@ export const mockBookings = [
     notes: null,
     confirmationSent: true,
     reminderSent: true,
+    depositRequired: false,
+    depositAmount: null,
+    depositStatus: 'NOT_REQUIRED',
   },
   {
     id: 'booking-13',
@@ -302,6 +366,9 @@ export const mockBookings = [
     notes: null,
     confirmationSent: true,
     reminderSent: true,
+    depositRequired: true,
+    depositAmount: 2000,
+    depositStatus: 'PAID',
   },
   {
     id: 'booking-14',
@@ -314,9 +381,12 @@ export const mockBookings = [
     startTime: createDate(-3, 16, 0).toISOString(),
     endTime: createDate(-3, 16, 45).toISOString(),
     status: 'CANCELLED',
-    notes: 'Client rescheduled',
-    confirmationSent: true,
+    notes: 'Deposit expired',
+    confirmationSent: false,
     reminderSent: false,
+    depositRequired: true,
+    depositAmount: 2000,
+    depositStatus: 'EXPIRED',
   },
 ];
 

@@ -10,6 +10,7 @@ const updateServiceSchema = z.object({
   price: z.number().min(0).optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.number().optional(),
+  depositOverride: z.number().min(0).max(100000).optional().nullable(),
 });
 
 export async function GET(

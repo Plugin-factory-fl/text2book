@@ -13,6 +13,7 @@ interface Service {
   duration: number;
   price: number | null;
   isActive: boolean;
+  depositOverride: number | null;
 }
 
 export default function ServicesPage() {
@@ -25,6 +26,7 @@ export default function ServicesPage() {
     description: '',
     duration: 60,
     price: '',
+    depositOverride: '',
   });
   const [isSaving, setIsSaving] = useState(false);
 
@@ -51,11 +53,16 @@ export default function ServicesPage() {
     setIsSaving(true);
 
     try {
+      const depositOverrideValue = formData.depositOverride === '' 
+        ? null 
+        : Math.round(parseFloat(formData.depositOverride) * 100);
+
       const body = {
         name: formData.name,
         description: formData.description || undefined,
         duration: formData.duration,
         price: formData.price ? parseFloat(formData.price) : undefined,
+        depositOverride: depositOverrideValue,
       };
 
       const response = await fetch(
@@ -84,6 +91,9 @@ export default function ServicesPage() {
       description: service.description || '',
       duration: service.duration,
       price: service.price?.toString() || '',
+      depositOverride: service.depositOverride !== null 
+        ? (service.depositOverride / 100).toString() 
+        : '',
     });
     setEditingId(service.id);
     setShowForm(true);
@@ -106,7 +116,7 @@ export default function ServicesPage() {
   };
 
   const resetForm = () => {
-    setFormData({ name: '', description: '', duration: 60, price: '' });
+    setFormData({ name: '', description: '', duration: 60, price: '', depositOverride: '' });
     setEditingId(null);
     setShowForm(false);
   };
@@ -194,6 +204,21 @@ export default function ServicesPage() {
                   placeholder="0.00"
                 />
               </div>
+
+              <Input
+                label="Deposit Override ($)"
+                type="number"
+                step="0.01"
+                min="0"
+                value={formData.depositOverride}
+                onChange={(e) =>
+                  setFormData({ ...formData, depositOverride: e.target.value })
+                }
+                placeholder="Leave blank to use default, 0 to disable"
+              />
+              <p className="text-xs text-gray-500 -mt-2">
+                Override the default deposit amount for this service. Leave blank to use business default, or enter 0 to skip deposit for this service.
+              </p>
 
               <div className="flex gap-2 pt-4">
                 <Button type="submit" isLoading={isSaving}>

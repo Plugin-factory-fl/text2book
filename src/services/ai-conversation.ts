@@ -271,7 +271,17 @@ async function generateAIResponse(
             bookingCreated = true;
             bookingId = bookingResult.booking.id;
             updatedContext.clientName = client_name;
-            functionResult = `Booking confirmed! ${service.name} on ${format(startTime, 'EEEE, MMMM d')} at ${format(startTime, 'h:mm a')} for ${client_name}.`;
+            
+            if (bookingResult.depositRequired && bookingResult.depositUrl) {
+              const depositDollars = (bookingResult.depositAmount || 0) / 100;
+              const business = businessContext.business as { depositHoldMinutes?: number; depositPolicyText?: string };
+              const holdMinutes = business.depositHoldMinutes || 30;
+              const policyText = business.depositPolicyText || 'The deposit is non-refundable on no-show and will be applied toward your service.';
+              
+              functionResult = `Slot held for ${service.name} on ${format(startTime, 'EEEE, MMMM d')} at ${format(startTime, 'h:mm a')} for ${client_name}. A $${depositDollars.toFixed(0)} deposit is required to confirm. Please pay within ${holdMinutes} minutes: ${bookingResult.depositUrl} ${policyText}`;
+            } else {
+              functionResult = `Booking confirmed! ${service.name} on ${format(startTime, 'EEEE, MMMM d')} at ${format(startTime, 'h:mm a')} for ${client_name}.`;
+            }
           } else {
             functionResult = bookingResult.error || 'Failed to create booking. The time slot may no longer be available.';
           }

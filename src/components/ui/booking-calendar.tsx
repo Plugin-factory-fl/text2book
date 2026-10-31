@@ -31,6 +31,9 @@ export interface CalendarBooking {
   endTime: string;
   status: string;
   notes?: string | null;
+  depositRequired?: boolean;
+  depositAmount?: number | null;
+  depositStatus?: string;
 }
 
 interface BookingCalendarProps {
@@ -100,10 +103,13 @@ export function BookingCalendar({ bookings, onBookingClick, isLoading }: Booking
     }
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string, depositStatus?: string) => {
+    if (status === 'AWAITING_DEPOSIT') {
+      return 'bg-orange-500';
+    }
     switch (status) {
       case 'CONFIRMED':
-        return 'bg-green-500';
+        return depositStatus === 'PAID' ? 'bg-green-600' : 'bg-green-500';
       case 'PENDING':
         return 'bg-yellow-500';
       case 'COMPLETED':
@@ -236,12 +242,13 @@ export function BookingCalendar({ bookings, onBookingClick, isLoading }: Booking
                     onClick={() => onBookingClick(booking)}
                     className={cn(
                       'w-full text-left px-1.5 py-0.5 rounded text-xs truncate text-white transition-opacity hover:opacity-80',
-                      getStatusColor(booking.status)
+                      getStatusColor(booking.status, booking.depositStatus)
                     )}
-                    title={`${booking.clientName} - ${booking.serviceName}`}
+                    title={`${booking.clientName} - ${booking.serviceName}${booking.status === 'AWAITING_DEPOSIT' ? ' (Awaiting Deposit)' : ''}`}
                   >
                     <span className="hidden sm:inline">{format(parseISO(booking.startTime), 'h:mm a')} </span>
                     {booking.clientName}
+                    {booking.status === 'AWAITING_DEPOSIT' && <span className="ml-1">💳</span>}
                   </button>
                 ))}
                 {dayBookings.length > (viewMode === 'week' ? 5 : 3) && (
@@ -283,6 +290,7 @@ export function BookingDetailModal({
     const styles: Record<string, string> = {
       CONFIRMED: 'bg-green-100 text-green-800',
       PENDING: 'bg-yellow-100 text-yellow-800',
+      AWAITING_DEPOSIT: 'bg-orange-100 text-orange-800',
       CANCELLED: 'bg-red-100 text-red-800',
       COMPLETED: 'bg-blue-100 text-blue-800',
       NO_SHOW: 'bg-gray-100 text-gray-800',
@@ -291,6 +299,25 @@ export function BookingDetailModal({
     return (
       <span className={`px-2 py-1 text-xs font-medium rounded-full ${styles[status] || 'bg-gray-100 text-gray-800'}`}>
         {status.replace('_', ' ')}
+      </span>
+    );
+  };
+
+  const getDepositBadge = (depositStatus: string | undefined, amount: number | null | undefined) => {
+    if (!depositStatus || depositStatus === 'NOT_REQUIRED') return null;
+    
+    const styles: Record<string, string> = {
+      PENDING: 'bg-orange-100 text-orange-800',
+      PAID: 'bg-green-100 text-green-800',
+      EXPIRED: 'bg-red-100 text-red-800',
+      REFUNDED: 'bg-purple-100 text-purple-800',
+    };
+
+    const amountText = amount ? ` ($${(amount / 100).toFixed(0)})` : '';
+
+    return (
+      <span className={`px-2 py-1 text-xs font-medium rounded-full ${styles[depositStatus] || 'bg-gray-100 text-gray-800'}`}>
+        Deposit: {depositStatus}{amountText}
       </span>
     );
   };
@@ -304,7 +331,10 @@ export function BookingDetailModal({
         <div className="flex items-start justify-between mb-4">
           <div>
             <h3 className="text-lg font-semibold text-gray-900">{booking.clientName}</h3>
-            {getStatusBadge(booking.status)}
+            <div className="flex flex-wrap gap-1 mt-1">
+              {getStatusBadge(booking.status)}
+              {getDepositBadge(booking.depositStatus, booking.depositAmount)}
+            </div>
           </div>
           <button
             onClick={onClose}

@@ -10,6 +10,7 @@ const serviceSchema = z.object({
   price: z.number().min(0).optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.number().optional(),
+  depositOverride: z.number().min(0).max(100000).optional().nullable(),
 });
 
 export async function GET() {
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { name, description, duration, price, isActive, sortOrder } = validation.data;
+    const { name, description, duration, price, isActive, sortOrder, depositOverride } = validation.data;
 
     const service = await prisma.service.create({
       data: {
@@ -62,6 +63,7 @@ export async function POST(request: NextRequest) {
         price,
         isActive: isActive ?? true,
         sortOrder: sortOrder ?? 0,
+        depositOverride,
       },
     });
 

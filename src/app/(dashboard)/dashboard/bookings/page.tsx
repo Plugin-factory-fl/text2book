@@ -22,6 +22,9 @@ interface Booking {
   notes: string | null;
   confirmationSent: boolean;
   reminderSent: boolean;
+  depositRequired: boolean;
+  depositAmount: number | null;
+  depositStatus: string;
 }
 
 type ViewType = 'calendar' | 'list';
@@ -96,6 +99,7 @@ export default function BookingsPage() {
     const styles: Record<string, string> = {
       CONFIRMED: 'bg-green-100 text-green-800',
       PENDING: 'bg-yellow-100 text-yellow-800',
+      AWAITING_DEPOSIT: 'bg-orange-100 text-orange-800',
       CANCELLED: 'bg-red-100 text-red-800',
       COMPLETED: 'bg-blue-100 text-blue-800',
       NO_SHOW: 'bg-gray-100 text-gray-800',
@@ -120,6 +124,9 @@ export default function BookingsPage() {
     endTime: b.endTime,
     status: b.status,
     notes: b.notes,
+    depositRequired: b.depositRequired,
+    depositAmount: b.depositAmount,
+    depositStatus: b.depositStatus,
   }));
 
   return (

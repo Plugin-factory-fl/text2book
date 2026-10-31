@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
 import prisma from '@/lib/prisma';
+import { handleDepositPaymentSuccess, handleDepositSessionExpired } from './stripe-connect';
 
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 
@@ -123,6 +124,22 @@ export async function handleWebhookEvent(
   }
 
   switch (event.type) {
+    case 'checkout.session.completed': {
+      const session = event.data.object as Stripe.Checkout.Session;
+      if (session.metadata?.type === 'deposit' && session.metadata?.platform === 'text2book') {
+        await handleDepositPaymentSuccess(session.id);
+      }
+      break;
+    }
+
+    case 'checkout.session.expired': {
+      const session = event.data.object as Stripe.Checkout.Session;
+      if (session.metadata?.type === 'deposit' && session.metadata?.platform === 'text2book') {
+        await handleDepositSessionExpired(session.id);
+      }
+      break;
+    }
+
     case 'customer.subscription.created':
     case 'customer.subscription.updated': {
       const subscription = event.data.object as Stripe.Subscription;

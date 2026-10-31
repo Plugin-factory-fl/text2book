@@ -3,6 +3,11 @@ import { addMinutes } from 'date-fns';
 import { isSlotAvailable, createCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from './calendar';
 import { sendSms } from './twilio';
 import { format } from 'date-fns';
+import { 
+  isClientTrusted, 
+  getDepositAmountForService, 
+  createDepositCheckoutSession 
+} from './stripe-connect';
 
 export interface CreateBookingParams {
   businessId: string;
@@ -24,6 +29,9 @@ export interface BookingResult {
     endTime: Date;
   };
   error?: string;
+  depositRequired?: boolean;
+  depositAmount?: number;
+  depositUrl?: string;
 }
 
 export async function createBooking(params: CreateBookingParams): Promise<BookingResult> {
@@ -53,7 +61,7 @@ export async function createBooking(params: CreateBookingParams): Promise<Bookin
     const conflictingBooking = await prisma.booking.findFirst({
       where: {
         businessId,
-        status: { in: ['CONFIRMED', 'PENDING'] },
+        status: { in: ['CONFIRMED', 'PENDING', 'AWAITING_DEPOSIT'] },
         OR: [
           {
             startTime: { lte: startTime },
@@ -82,7 +90,7 @@ export async function createBooking(params: CreateBookingParams): Promise<Bookin
   const existingBooking = await prisma.booking.findFirst({
     where: {
       businessId,
-      status: { in: ['CONFIRMED', 'PENDING'] },
+      status: { in: ['CONFIRMED', 'PENDING', 'AWAITING_DEPOSIT'] },
       OR: [
         {
           startTime: { lte: startTime },
@@ -116,19 +124,31 @@ export async function createBooking(params: CreateBookingParams): Promise<Bookin
     return { success: false, error: 'Business not found' };
   }
 
+  const trusted = await isClientTrusted(businessId, clientPhone);
+  const depositAmount = trusted ? null : await getDepositAmountForService(businessId, serviceId);
+  const requiresDeposit = depositAmount !== null && depositAmount > 0;
+
   let calendarEventId: string | null = null;
-  try {
-    calendarEventId = await createCalendarEvent({
-      businessId,
-      summary: `${service.name} - ${clientName}`,
-      description: `Client: ${clientName}\nPhone: ${clientPhone}${clientEmail ? `\nEmail: ${clientEmail}` : ''}${notes ? `\nNotes: ${notes}` : ''}`,
-      startTime,
-      endTime,
-      attendeeEmail: clientEmail,
-    });
-  } catch (error) {
-    console.error('Failed to create calendar event:', error);
+  
+  if (!requiresDeposit) {
+    try {
+      calendarEventId = await createCalendarEvent({
+        businessId,
+        summary: `${service.name} - ${clientName}`,
+        description: `Client: ${clientName}\nPhone: ${clientPhone}${clientEmail ? `\nEmail: ${clientEmail}` : ''}${notes ? `\nNotes: ${notes}` : ''}`,
+        startTime,
+        endTime,
+        attendeeEmail: clientEmail,
+      });
+    } catch (error) {
+      console.error('Failed to create calendar event:', error);
+    }
   }
+
+  const depositHoldMinutes = business.depositHoldMinutes || 30;
+  const depositExpiresAt = requiresDeposit 
+    ? new Date(Date.now() + depositHoldMinutes * 60 * 1000) 
+    : null;
 
   const booking = await prisma.booking.create({
     data: {
@@ -144,9 +164,42 @@ export async function createBooking(params: CreateBookingParams): Promise<Bookin
       startTime,
       endTime,
       calendarEventId,
-      status: 'CONFIRMED',
+      status: requiresDeposit ? 'AWAITING_DEPOSIT' : 'CONFIRMED',
+      depositRequired: requiresDeposit,
+      depositAmount: depositAmount,
+      depositStatus: requiresDeposit ? 'PENDING' : 'NOT_REQUIRED',
+      depositExpiresAt,
     },
   });
+
+  if (requiresDeposit && depositAmount) {
+    const checkoutResult = await createDepositCheckoutSession({
+      bookingId: booking.id,
+      businessId,
+      amount: depositAmount,
+      clientPhone,
+      serviceName: service.name,
+      businessName: business.name,
+    });
+
+    if ('error' in checkoutResult) {
+      await prisma.booking.delete({ where: { id: booking.id } });
+      return { success: false, error: checkoutResult.error };
+    }
+
+    return {
+      success: true,
+      booking: {
+        id: booking.id,
+        serviceName: service.name,
+        startTime,
+        endTime,
+      },
+      depositRequired: true,
+      depositAmount,
+      depositUrl: checkoutResult.url,
+    };
+  }
 
   const reminderHours = business.reminderHoursBefore || 24;
   const reminderTime = new Date(startTime.getTime() - reminderHours * 60 * 60 * 1000);
