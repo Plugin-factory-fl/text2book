@@ -10,16 +10,16 @@ interface ChiefAvatarProps {
 }
 
 const sizeMap = {
-  sm: { container: 'w-10 h-10', image: 32, badge: 'w-5 h-5 -top-0.5 -right-0.5 text-xs' },
-  md: { container: 'w-14 h-14', image: 48, badge: 'w-6 h-6 -top-0.5 -right-0.5 text-sm' },
-  lg: { container: 'w-20 h-20', image: 72, badge: 'w-7 h-7 -top-1 -right-1 text-sm' },
+  sm: { container: 'w-10 h-10', image: 32, badge: 'w-5 h-5 text-xs' },
+  md: { container: 'w-14 h-14', image: 48, badge: 'w-6 h-6 text-sm' },
+  lg: { container: 'w-20 h-20', image: 72, badge: 'w-7 h-7 text-sm' },
 };
 
 export function ChiefAvatar({ size = 'lg', showBadge = true, className }: ChiefAvatarProps) {
   const { container, image, badge } = sizeMap[size];
 
   return (
-    <div className={cn('relative', className)}>
+    <div className={cn('relative inline-flex items-center justify-center', className)}>
       {/* Animated border container */}
       <div className={cn('chief-avatar-glow relative rounded-full', container)}>
         {/* Conic gradient spinning border */}
@@ -48,11 +48,12 @@ export function ChiefAvatar({ size = 'lg', showBadge = true, className }: ChiefA
         </div>
       </div>
 
-      {/* Star badge */}
+      {/* Star badge - positioned at bottom-right of avatar */}
       {showBadge && (
         <div
           className={cn(
             'absolute bg-yellow-400 rounded-full flex items-center justify-center shadow-md border-2 border-white',
+            'bottom-0 right-0 translate-x-1 translate-y-1',
             badge
           )}
         >
