@@ -12,6 +12,17 @@ interface Message {
   isAi?: boolean;
 }
 
+interface InternalNote {
+  id: string;
+  noteType: 'CONSULT' | 'RESPONSE' | 'ESCALATION' | 'DIRECTIVE' | 'INJECTION_ATTEMPT';
+  content: string;
+  fromAgent: string;
+  toAgent: string | null;
+  wasFiltered: boolean;
+  filterReason: string | null;
+  createdAt: string;
+}
+
 interface SmsThreadProps {
   messages: Message[];
   clientName: string | null;
@@ -19,6 +30,19 @@ interface SmsThreadProps {
   onSendMessage?: (message: string) => Promise<void>;
   onTakeOver?: () => void;
   isAiActive?: boolean;
+  internalNotes?: InternalNote[];
+  showInternalNotes?: boolean;
+}
+
+function getNoteTypeLabel(noteType: string): { label: string; color: string; icon: string } {
+  const types: Record<string, { label: string; color: string; icon: string }> = {
+    CONSULT: { label: 'Consult', color: 'bg-blue-100 text-blue-800 border-blue-200', icon: '💬' },
+    RESPONSE: { label: 'Response', color: 'bg-green-100 text-green-800 border-green-200', icon: '↩️' },
+    ESCALATION: { label: 'Escalation', color: 'bg-orange-100 text-orange-800 border-orange-200', icon: '⚠️' },
+    DIRECTIVE: { label: 'Directive', color: 'bg-purple-100 text-purple-800 border-purple-200', icon: '📋' },
+    INJECTION_ATTEMPT: { label: 'Blocked', color: 'bg-red-100 text-red-800 border-red-200', icon: '🛡️' },
+  };
+  return types[noteType] || { label: noteType, color: 'bg-gray-100 text-gray-800 border-gray-200', icon: '📝' };
 }
 
 export function SmsThread({
@@ -28,9 +52,12 @@ export function SmsThread({
   onSendMessage,
   onTakeOver,
   isAiActive = true,
+  internalNotes = [],
+  showInternalNotes: initialShowNotes = false,
 }: SmsThreadProps) {
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [showInternalNotes, setShowInternalNotes] = useState(initialShowNotes);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -70,15 +97,66 @@ export function SmsThread({
           </h2>
           <p className="text-sm text-gray-500">{formatPhoneNumber(clientPhone)}</p>
         </div>
-        {isAiActive && onTakeOver && (
-          <button
-            onClick={onTakeOver}
-            className="px-3 py-1.5 text-sm bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors"
-          >
-            Take over from AI
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {internalNotes.length > 0 && (
+            <button
+              onClick={() => setShowInternalNotes(!showInternalNotes)}
+              className={cn(
+                'px-3 py-1.5 text-sm rounded-lg transition-colors',
+                showInternalNotes
+                  ? 'bg-indigo-100 text-indigo-700'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              )}
+            >
+              {showInternalNotes ? 'Hide' : 'Show'} Internal ({internalNotes.length})
+            </button>
+          )}
+          {isAiActive && onTakeOver && (
+            <button
+              onClick={onTakeOver}
+              className="px-3 py-1.5 text-sm bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors"
+            >
+              Take over from AI
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Internal Notes Panel */}
+      {showInternalNotes && internalNotes.length > 0 && (
+        <div className="p-4 bg-indigo-50 border-b border-indigo-100 max-h-48 overflow-y-auto">
+          <h3 className="text-xs font-semibold text-indigo-800 mb-2 flex items-center gap-1">
+            🔒 Internal Notes (not sent to client)
+          </h3>
+          <div className="space-y-2">
+            {internalNotes.map((note) => {
+              const typeInfo = getNoteTypeLabel(note.noteType);
+              return (
+                <div
+                  key={note.id}
+                  className={cn('p-2 rounded-lg border text-xs', typeInfo.color)}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-medium flex items-center gap-1">
+                      {typeInfo.icon} {typeInfo.label}
+                      {note.wasFiltered && (
+                        <span className="text-red-600">(filtered)</span>
+                      )}
+                    </span>
+                    <span className="opacity-75">
+                      {format(new Date(note.createdAt), 'h:mm a')}
+                    </span>
+                  </div>
+                  <p className="whitespace-pre-wrap">{note.content}</p>
+                  {note.filterReason && (
+                    <p className="mt-1 text-red-600 italic">Reason: {note.filterReason}</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.map((message) => (

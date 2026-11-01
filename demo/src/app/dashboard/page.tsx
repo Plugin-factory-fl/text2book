@@ -1,12 +1,23 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { ConversationList } from '@/components/dashboard/conversation-list';
 import { AssistantChat } from '@/components/dashboard/assistant-chat';
 import { SmsThread } from '@/components/dashboard/sms-thread';
 import { ClientInfoPanel } from '@/components/dashboard/client-info-panel';
+import { BusinessOverviewPanel } from '@/components/dashboard/business-overview-panel';
 import { cn } from '@/lib/utils';
-import { mockUser, mockConversations, mockBookings, mockTrustedClients } from '@/data/mock-data';
+import { 
+  mockUser, 
+  mockBusiness, 
+  mockConversations, 
+  mockBookings, 
+  mockTrustedClients, 
+  mockInternalNotes,
+  mockMetrics,
+  mockEscalations,
+} from '@/data/mock-data';
 
 interface Booking {
   id: string;
@@ -34,7 +45,8 @@ interface ClientStats {
   averageSpend: number;
 }
 
-export default function DashboardPage() {
+function DashboardContent() {
+  const searchParams = useSearchParams();
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [isAssistantSelected, setIsAssistantSelected] = useState(true);
   const [trustedPhones, setTrustedPhones] = useState<string[]>(
@@ -42,6 +54,17 @@ export default function DashboardPage() {
   );
   const [mobileView, setMobileView] = useState<'list' | 'chat' | 'info'>('list');
   const [localMessages, setLocalMessages] = useState<Record<string, typeof mockConversations[0]['messages']>>({});
+
+  useEffect(() => {
+    const conversationParam = searchParams.get('conversation');
+    if (conversationParam) {
+      const convo = mockConversations.find((c) => c.id === conversationParam);
+      if (convo) {
+        setSelectedConversationId(conversationParam);
+        setIsAssistantSelected(false);
+      }
+    }
+  }, [searchParams]);
 
   const conversationsWithBookings = mockConversations.map((conv) => ({
     ...conv,
@@ -63,6 +86,7 @@ export default function DashboardPage() {
         depositAmount: b.depositAmount,
         depositStatus: b.depositStatus,
       })),
+    internalNotes: mockInternalNotes.filter((n) => n.conversationId === conv.id),
   }));
 
   const selectedConversation = conversationsWithBookings.find(
@@ -208,6 +232,7 @@ export default function DashboardPage() {
             onSelect={handleConversationSelect}
             isAssistantSelected={isAssistantSelected}
             onAssistantSelect={handleAssistantSelect}
+            businessName={mockBusiness.name}
           />
         </div>
 
@@ -229,6 +254,7 @@ export default function DashboardPage() {
               onTakeOver={() => {
                 alert('Demo: You would now take over this conversation from the AI.');
               }}
+              internalNotes={selectedConversation.internalNotes}
             />
           ) : (
             <div className="h-full flex items-center justify-center bg-gray-50">
@@ -242,7 +268,28 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {selectedConversation && (
+        {isAssistantSelected ? (
+          <div
+            className={cn(
+              'w-80 lg:w-96 flex-shrink-0',
+              mobileView !== 'info' && 'hidden lg:block'
+            )}
+          >
+            <BusinessOverviewPanel
+              businessName={mockBusiness.name}
+              metrics={mockMetrics}
+              recentEscalations={mockEscalations}
+              conversationAiStatuses={conversationsWithBookings.map((c) => ({
+                id: c.id,
+                clientName: c.clientName,
+                clientPhone: c.clientPhone,
+                state: c.state,
+                isAiHandling: c.state !== 'OWNER_TAKEOVER' && c.state !== 'ESCALATE',
+              }))}
+              onConversationSelect={handleConversationSelect}
+            />
+          </div>
+        ) : selectedConversation ? (
           <div
             className={cn(
               'w-80 lg:w-96 flex-shrink-0',
@@ -274,8 +321,26 @@ export default function DashboardPage() {
               calendarSynced={false}
             />
           </div>
-        )}
+        ) : null}
       </div>
     </div>
+  );
+}
+
+function DashboardLoading() {
+  return (
+    <div className="h-[calc(100vh-4rem)] flex items-center justify-center">
+      <div className="text-center text-gray-500">
+        <p className="text-lg">Loading dashboard...</p>
+      </div>
+    </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<DashboardLoading />}>
+      <DashboardContent />
+    </Suspense>
   );
 }

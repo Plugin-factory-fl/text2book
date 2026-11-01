@@ -37,6 +37,7 @@ interface ConversationListProps {
   onSelect: (id: string | null) => void;
   isAssistantSelected: boolean;
   onAssistantSelect: () => void;
+  businessName?: string;
 }
 
 function getDepositIcon(booking: Booking | undefined): { icon: string; label: string } | null {
@@ -65,6 +66,7 @@ export function ConversationList({
   onSelect,
   isAssistantSelected,
   onAssistantSelect,
+  businessName = 'Your Business',
 }: ConversationListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
@@ -96,8 +98,39 @@ export function ConversationList({
     }
   });
 
+  const needsAttentionCount = conversations.filter(
+    (c) => c.state === 'ESCALATE' || (c.unreadCount && c.unreadCount > 0)
+  ).length;
+
   return (
     <div className="h-full flex flex-col bg-white border-r border-gray-200">
+      {/* Chief Assistant Header */}
+      <button
+        onClick={onAssistantSelect}
+        className={cn(
+          'p-6 border-b-2 border-gray-200 hover:bg-blue-50/50 transition-colors text-center',
+          isAssistantSelected && 'bg-blue-50'
+        )}
+      >
+        <div className="relative w-20 h-20 mx-auto mb-3">
+          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-indigo-600 flex items-center justify-center shadow-lg">
+            <span className="text-white text-3xl">🤖</span>
+          </div>
+          <div className="absolute -top-1 -right-1 w-7 h-7 bg-yellow-400 rounded-full flex items-center justify-center shadow-md border-2 border-white">
+            <span className="text-sm">⭐</span>
+          </div>
+        </div>
+        <h2 className="font-bold text-gray-900 text-lg">Chief Assistant</h2>
+        <p className="text-sm text-gray-500">{businessName}</p>
+        {needsAttentionCount > 0 && (
+          <div className="mt-2 inline-flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
+            <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse" />
+            {needsAttentionCount} need{needsAttentionCount === 1 ? 's' : ''} attention
+          </div>
+        )}
+      </button>
+
+      {/* Search and Filters */}
       <div className="p-4 border-b border-gray-200 space-y-3">
         <input
           type="text"
@@ -129,26 +162,8 @@ export function ConversationList({
         </div>
       </div>
 
+      {/* Conversations List */}
       <div className="flex-1 overflow-y-auto">
-        <button
-          onClick={onAssistantSelect}
-          className={cn(
-            'w-full p-4 flex items-start gap-3 border-b border-gray-100 hover:bg-gray-50 transition-colors text-left',
-            isAssistantSelected && 'bg-blue-50'
-          )}
-        >
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-            <span className="text-white text-lg">🤖</span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-gray-900">Assistant</span>
-            </div>
-            <p className="text-sm text-gray-500 truncate">
-              Ask me anything about your business
-            </p>
-          </div>
-        </button>
 
         {filteredConversations.map((conv) => {
           const lastMessage = conv.messages[conv.messages.length - 1];

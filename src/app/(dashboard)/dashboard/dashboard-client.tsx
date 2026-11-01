@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { ConversationList } from '@/components/dashboard/conversation-list';
 import { AssistantChat } from '@/components/dashboard/assistant-chat';
 import { SmsThread } from '@/components/dashboard/sms-thread';
 import { ClientInfoPanel } from '@/components/dashboard/client-info-panel';
+import { BusinessOverviewPanel } from '@/components/dashboard/business-overview-panel';
 import { cn } from '@/lib/utils';
 
 interface Message {
@@ -31,6 +33,17 @@ interface Booking {
   depositStatus?: string;
 }
 
+interface InternalNote {
+  id: string;
+  noteType: 'CONSULT' | 'RESPONSE' | 'ESCALATION' | 'DIRECTIVE' | 'INJECTION_ATTEMPT';
+  content: string;
+  fromAgent: string;
+  toAgent: string | null;
+  wasFiltered: boolean;
+  filterReason: string | null;
+  createdAt: string;
+}
+
 interface Conversation {
   id: string;
   clientPhone: string;
@@ -41,6 +54,24 @@ interface Conversation {
   bookings?: Booking[];
   isTrusted?: boolean;
   unreadCount?: number;
+  internalNotes?: InternalNote[];
+}
+
+interface Metrics {
+  totalClients: number;
+  activeConversations: number;
+  conversationsNeedingAttention: number;
+  unpaidDeposits: number;
+  todayBookings: number;
+  upcomingBookings: number;
+}
+
+interface Escalation {
+  conversationId: string;
+  clientName: string | null;
+  clientPhone: string;
+  reason: string;
+  timestamp: string;
 }
 
 interface ClientStats {
@@ -59,6 +90,8 @@ interface DashboardClientProps {
   conversations: Conversation[];
   clientStats: Record<string, ClientStats>;
   trustedPhones: string[];
+  metrics?: Metrics;
+  recentEscalations?: Escalation[];
 }
 
 export function DashboardClient({
@@ -68,11 +101,25 @@ export function DashboardClient({
   conversations,
   clientStats,
   trustedPhones: initialTrustedPhones,
+  metrics,
+  recentEscalations = [],
 }: DashboardClientProps) {
+  const searchParams = useSearchParams();
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [isAssistantSelected, setIsAssistantSelected] = useState(true);
   const [trustedPhones, setTrustedPhones] = useState<string[]>(initialTrustedPhones);
   const [mobileView, setMobileView] = useState<'list' | 'chat' | 'info'>('list');
+
+  useEffect(() => {
+    const conversationParam = searchParams.get('conversation');
+    if (conversationParam) {
+      const convo = conversations.find((c) => c.id === conversationParam);
+      if (convo) {
+        setSelectedConversationId(conversationParam);
+        setIsAssistantSelected(false);
+      }
+    }
+  }, [searchParams, conversations]);
 
   const selectedConversation = conversations.find((c) => c.id === selectedConversationId);
 
@@ -211,6 +258,7 @@ export function DashboardClient({
             onSelect={handleConversationSelect}
             isAssistantSelected={isAssistantSelected}
             onAssistantSelect={handleAssistantSelect}
+            businessName={businessName}
           />
         </div>
 
@@ -221,12 +269,21 @@ export function DashboardClient({
           )}
         >
           {isAssistantSelected ? (
-            <AssistantChat
-              clientContext={null}
-              onActionComplete={() => {
-                window.location.reload();
-              }}
-            />
+            metrics ? (
+              <AssistantChat
+                clientContext={null}
+                onActionComplete={() => {
+                  window.location.reload();
+                }}
+              />
+            ) : (
+              <AssistantChat
+                clientContext={null}
+                onActionComplete={() => {
+                  window.location.reload();
+                }}
+              />
+            )
           ) : selectedConversation ? (
             <SmsThread
               messages={selectedConversation.messages}
@@ -242,6 +299,7 @@ export function DashboardClient({
                 });
                 window.location.reload();
               }}
+              internalNotes={selectedConversation.internalNotes}
             />
           ) : (
             <div className="h-full flex items-center justify-center bg-gray-50">
@@ -255,7 +313,28 @@ export function DashboardClient({
           )}
         </div>
 
-        {selectedConversation && (
+        {isAssistantSelected && metrics ? (
+          <div
+            className={cn(
+              'w-80 lg:w-96 flex-shrink-0',
+              mobileView !== 'info' && 'hidden lg:block'
+            )}
+          >
+            <BusinessOverviewPanel
+              businessName={businessName}
+              metrics={metrics}
+              recentEscalations={recentEscalations}
+              conversationAiStatuses={conversations.map((c) => ({
+                id: c.id,
+                clientName: c.clientName,
+                clientPhone: c.clientPhone,
+                state: c.state,
+                isAiHandling: c.state !== 'OWNER_TAKEOVER' && c.state !== 'ESCALATE',
+              }))}
+              onConversationSelect={handleConversationSelect}
+            />
+          </div>
+        ) : selectedConversation ? (
           <div
             className={cn(
               'w-80 lg:w-96 flex-shrink-0',
@@ -292,7 +371,7 @@ export function DashboardClient({
               calendarSynced={false}
             />
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

@@ -253,6 +253,8 @@ model Conversation {
   business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
   messages Message[]
   bookings Booking[]
+  internalNotes InternalNote[]
+  ownerDirectives OwnerDirective[]
 
   @@unique([businessId, clientPhone])
   @@index([businessId])
@@ -361,4 +363,43 @@ model DepositPayment {
 
   @@index([stripeCheckoutSessionId])
   @@index([stripePaymentIntentId])
+}
+
+model InternalNote {
+  id             String       @id @default(cuid())
+  conversationId String
+  noteType       NoteType     @default(CONSULT)
+  content        String       @db.Text
+  fromAgent      String
+  toAgent        String?
+  wasFiltered    Boolean      @default(false)
+  filterReason   String?
+  createdAt      DateTime     @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([noteType])
+}
+
+enum NoteType {
+  CONSULT
+  RESPONSE
+  ESCALATION
+  DIRECTIVE
+  INJECTION_ATTEMPT
+}
+
+model OwnerDirective {
+  id             String   @id @default(cuid())
+  conversationId String
+  directive      String   @db.Text
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime?
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([isActive])
 }
