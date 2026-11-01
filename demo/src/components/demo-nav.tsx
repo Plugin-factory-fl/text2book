@@ -8,7 +8,6 @@ import { mockUser } from '@/data/mock-data';
 const navItems = [
   { href: '/dashboard', label: 'Overview' },
   { href: '/dashboard/bookings', label: 'Bookings' },
-  { href: '/dashboard/conversations', label: 'Conversations' },
   { href: '/dashboard/services', label: 'Services' },
   { href: '/dashboard/hours', label: 'Hours' },
   { href: '/dashboard/faqs', label: 'FAQs' },
