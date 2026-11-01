@@ -236,7 +236,7 @@ export function DashboardClient({
   };
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col">
+    <div className="h-full min-h-0 flex flex-col overflow-hidden">
       <div className="md:hidden flex border-b border-gray-200 bg-white">
         <button
           onClick={() => setMobileView('list')}
@@ -275,12 +275,12 @@ export function DashboardClient({
         )}
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 min-h-0 flex overflow-hidden">
         {/* Left Panel (Conversation List) */}
         <div
           className={cn(
-            'flex-shrink-0 transition-all duration-300 ease-in-out',
-            isLeftPanelOpen ? 'w-full md:w-80 lg:w-96' : 'w-0',
+            'flex-shrink-0 min-h-0 transition-all duration-300 ease-in-out overflow-hidden',
+            isLeftPanelOpen ? 'w-full md:w-72 xl:w-80' : 'w-0',
             mobileView !== 'list' && 'hidden md:block'
           )}
         >
@@ -302,7 +302,7 @@ export function DashboardClient({
         {/* Middle Panel (Chat/Assistant) */}
         <div
           className={cn(
-            'flex-1 min-w-0 flex flex-col',
+            'flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden',
             mobileView !== 'chat' && 'hidden md:flex'
           )}
         >
@@ -332,7 +332,7 @@ export function DashboardClient({
           </div>
 
           {/* Chat Content */}
-          <div className="flex-1 min-h-0">
+          <div className="flex-1 min-h-0 overflow-hidden">
             {isAssistantSelected ? (
               <AssistantChat
                 clientContext={null}
@@ -373,8 +373,8 @@ export function DashboardClient({
         {/* Right Panel (Info/Overview) */}
         <div
           className={cn(
-            'flex-shrink-0 transition-all duration-300 ease-in-out',
-            isRightPanelOpen ? 'w-80 lg:w-96' : 'w-0',
+            'flex-shrink-0 min-h-0 transition-all duration-300 ease-in-out overflow-hidden',
+            isRightPanelOpen ? 'w-72 xl:w-80' : 'w-0',
             mobileView !== 'info' && 'hidden lg:block'
           )}
         >

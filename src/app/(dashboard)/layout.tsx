@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { DashboardNav } from '@/components/dashboard/nav';
+import { DashboardMain } from '@/components/dashboard/dashboard-main';
 
 export default async function DashboardLayout({
   children,
@@ -14,11 +15,11 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <DashboardNav user={session.user} />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {children}
-      </main>
+    <div className="h-dvh flex flex-col overflow-hidden bg-gray-50">
+      <div className="flex-shrink-0">
+        <DashboardNav user={session.user} />
+      </div>
+      <DashboardMain>{children}</DashboardMain>
     </div>
   );
 }

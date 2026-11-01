@@ -6,7 +6,7 @@ import { DashboardClient } from './dashboard-client';
 
 function DashboardLoading() {
   return (
-    <div className="h-[calc(100vh-4rem)] flex items-center justify-center">
+    <div className="h-full flex items-center justify-center">
       <div className="text-center text-gray-500">
         <p className="text-lg">Loading dashboard...</p>
       </div>

@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { getAssetPath } from '@/lib/asset-path';
 
 interface ChiefAvatarProps {
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'header' | 'lg';
   showBadge?: boolean;
   className?: string;
 }
@@ -12,6 +12,7 @@ interface ChiefAvatarProps {
 const sizeMap = {
   sm: { container: 'w-10 h-10', image: 32, badge: 'w-5 h-5 text-xs' },
   md: { container: 'w-14 h-14', image: 48, badge: 'w-6 h-6 text-sm' },
+  header: { container: 'w-16 h-16', image: 56, badge: 'w-6 h-6 text-sm' },
   lg: { container: 'w-20 h-20', image: 72, badge: 'w-7 h-7 text-sm' },
 };
 
