@@ -271,6 +271,7 @@ enum ConversationState {
   RESCHEDULE
   CANCEL
   ESCALATE
+  OWNER_TAKEOVER
 }
 
 model Message {
@@ -279,7 +280,8 @@ model Message {
   direction      MessageDir
   content        String      @db.Text
   twilioSid      String?
-  status         String?     // delivered, failed, etc.
+  status         String?
+  isAi           Boolean     @default(true)
   createdAt      DateTime    @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
