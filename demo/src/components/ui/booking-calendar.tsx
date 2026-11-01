@@ -120,6 +120,13 @@ export function BookingCalendar({ bookings, onBookingClick, isLoading }: Booking
     }
   };
 
+  const getDepositIcon = (depositRequired?: boolean, depositStatus?: string): { icon: string; label: string } | null => {
+    if (!depositRequired) return null;
+    if (depositStatus === 'PAID') return { icon: '💵✅', label: 'Deposit Paid' };
+    if (depositStatus === 'PENDING') return { icon: '💵⏳', label: 'Deposit Pending' };
+    return null;
+  };
+
   if (isLoading) {
     return (
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8 text-center">
@@ -130,6 +137,20 @@ export function BookingCalendar({ bookings, onBookingClick, isLoading }: Booking
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      {/* Legend */}
+      <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex flex-wrap gap-4 text-xs text-gray-600">
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded bg-green-500"></span> Confirmed
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded bg-orange-500"></span> Awaiting Deposit
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded bg-blue-500"></span> Completed
+        </span>
+        <span className="flex items-center gap-1">💵✅ Deposit Paid</span>
+        <span className="flex items-center gap-1">💵⏳ Deposit Pending</span>
+      </div>
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-200">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -235,21 +256,24 @@ export function BookingCalendar({ bookings, onBookingClick, isLoading }: Booking
                 {format(day, 'd')}
               </div>
               <div className="space-y-1">
-                {dayBookings.slice(0, viewMode === 'week' ? 5 : 3).map((booking) => (
-                  <button
-                    key={booking.id}
-                    onClick={() => onBookingClick(booking)}
-                    className={cn(
-                      'w-full text-left px-1.5 py-0.5 rounded text-xs truncate text-white transition-opacity hover:opacity-80',
-                      getStatusColor(booking.status, booking.depositStatus)
-                    )}
-                    title={`${booking.clientName} - ${booking.serviceName}${booking.status === 'AWAITING_DEPOSIT' ? ' (Awaiting Deposit)' : ''}`}
-                  >
-                    <span className="hidden sm:inline">{format(parseISO(booking.startTime), 'h:mm a')} </span>
-                    {booking.clientName}
-                    {booking.status === 'AWAITING_DEPOSIT' && <span className="ml-1">💳</span>}
-                  </button>
-                ))}
+                {dayBookings.slice(0, viewMode === 'week' ? 5 : 3).map((booking) => {
+                  const depositIcon = getDepositIcon(booking.depositRequired, booking.depositStatus);
+                  return (
+                    <button
+                      key={booking.id}
+                      onClick={() => onBookingClick(booking)}
+                      className={cn(
+                        'w-full text-left px-1.5 py-0.5 rounded text-xs truncate text-white transition-opacity hover:opacity-80',
+                        getStatusColor(booking.status, booking.depositStatus)
+                      )}
+                      title={`${booking.clientName} - ${booking.serviceName}${depositIcon ? ` (${depositIcon.label})` : ''}`}
+                    >
+                      <span className="hidden sm:inline">{format(parseISO(booking.startTime), 'h:mm a')} </span>
+                      {booking.clientName}
+                      {depositIcon && <span className="ml-1">{depositIcon.icon}</span>}
+                    </button>
+                  );
+                })}
                 {dayBookings.length > (viewMode === 'week' ? 5 : 3) && (
                   <p className="text-xs text-gray-500 px-1">
                     +{dayBookings.length - (viewMode === 'week' ? 5 : 3)} more
@@ -364,6 +388,18 @@ export function BookingDetailModal({
             <p className="text-sm text-gray-500">Phone</p>
             <p className="font-medium text-gray-900">{formatPhone(booking.clientPhone)}</p>
           </div>
+
+          {booking.depositRequired && (
+            <div>
+              <p className="text-sm text-gray-500">Deposit</p>
+              <p className="font-medium text-gray-900">
+                {booking.depositStatus === 'PAID' && '💵✅ Paid'}
+                {booking.depositStatus === 'PENDING' && '💵⏳ Pending'}
+                {booking.depositStatus === 'EXPIRED' && '❌ Expired'}
+                {booking.depositAmount && ` ($${(booking.depositAmount / 100).toFixed(0)})`}
+              </p>
+            </div>
+          )}
 
           {booking.clientEmail && (
             <div>
