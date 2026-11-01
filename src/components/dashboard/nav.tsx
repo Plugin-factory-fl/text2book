@@ -14,10 +14,10 @@ interface DashboardNavProps {
 
 const navItems = [
   { href: '/dashboard', label: 'Overview' },
-  { href: '/dashboard/bookings', label: 'Bookings' },
+  { href: '/dashboard/calendar', label: 'Calendar' },
   { href: '/dashboard/services', label: 'Services' },
   { href: '/dashboard/hours', label: 'Hours' },
-  { href: '/dashboard/faqs', label: 'FAQs' },
+  { href: '/dashboard/business-info', label: 'Business Info' },
   { href: '/dashboard/settings', label: 'Settings' },
   { href: '/dashboard/billing', label: 'Billing' },
 ];

@@ -5,10 +5,10 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { formatCurrency, formatDuration } from '@/lib/utils';
-import { mockServices } from '@/data/mock-data';
+import { useDemoData } from '@/contexts/demo-data-context';
 
 export default function ServicesPage() {
-  const [services] = useState(mockServices);
+  const { services } = useDemoData();
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
