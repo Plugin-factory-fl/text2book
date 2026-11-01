@@ -40,6 +40,7 @@ describe('Assistant Tool Definitions', () => {
     expect(toolNames).toContain('update_reminder_settings');
     expect(toolNames).toContain('get_client_info');
     expect(toolNames).toContain('update_client_name');
+    expect(toolNames).toContain('import_business_info');
   });
 
   it('should have valid function schema for each tool', () => {
@@ -131,7 +132,7 @@ describe('Destructive Action Confirmations', () => {
   });
 
   it('should define client-facing tools with confirmation parameter', () => {
-    const clientFacingTools = ['create_booking', 'reschedule_booking', 'cancel_booking'];
+    const clientFacingTools = ['create_booking', 'reschedule_booking', 'cancel_booking', 'import_business_info'];
 
     for (const toolName of clientFacingTools) {
       const tool = ASSISTANT_TOOL_DEFINITIONS.find((t) => t.function.name === toolName);

@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import prisma from '@/lib/prisma';
+import { OPENAI_LIMITS, OPENAI_MODEL_CLIENT, requireOpenAIClient, trimConversationHistory } from '@/lib/openai';
 import {
   buildSystemPrompt,
   buildUserContextPrompt,
@@ -15,12 +16,7 @@ import { format, parse, addDays, startOfDay, parseISO } from 'date-fns';
 import { ConversationState } from '@prisma/client';
 
 function getOpenAIClient(): OpenAI {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error('OPENAI_API_KEY environment variable is not set');
-  }
-  return new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-  });
+  return requireOpenAIClient();
 }
 
 export interface ProcessMessageResult {
@@ -57,8 +53,8 @@ export async function processIncomingMessage(
     },
     include: {
       messages: {
-        orderBy: { createdAt: 'asc' },
-        take: 20,
+        orderBy: { createdAt: 'desc' },
+        take: 40,
       },
     },
   });
@@ -95,10 +91,12 @@ export async function processIncomingMessage(
   const conversationContext: ConversationContext = 
     (conversation.context as unknown as ConversationContext) ?? { clientPhone };
 
-  const messageHistory: MessageHistory[] = conversation.messages.map((m) => ({
-    role: m.direction === 'INBOUND' ? 'user' : 'assistant',
-    content: m.content,
-  }));
+  const messageHistory: MessageHistory[] = [...conversation.messages]
+    .reverse()
+    .map((m) => ({
+      role: m.direction === 'INBOUND' ? 'user' : 'assistant',
+      content: m.content,
+    }));
 
   const result = await generateAIResponse(
     businessContext,
@@ -169,7 +167,14 @@ async function generateAIResponse(
     });
   }
 
-  const conversationMessages = buildConversationPrompt(messageHistory, currentMessage);
+  const { summary, recent } = trimConversationHistory(messageHistory, OPENAI_LIMITS.historyWindow);
+  if (summary) {
+    messages.push({
+      role: 'system',
+      content: summary,
+    });
+  }
+  const conversationMessages = buildConversationPrompt(recent, currentMessage);
   conversationMessages.forEach((m) => {
     messages.push({ role: m.role, content: m.content });
   });
@@ -182,12 +187,12 @@ async function generateAIResponse(
   try {
     const openaiClient = getOpenAIClient();
     response = await openaiClient.chat.completions.create({
-      model: 'gpt-4o',
+      model: OPENAI_MODEL_CLIENT,
       messages,
       functions: BOOKING_FUNCTIONS,
       function_call: 'auto',
-      max_tokens: 200,
-      temperature: 0.7,
+      max_tokens: OPENAI_LIMITS.smsMaxTokens,
+      temperature: OPENAI_LIMITS.smsTemperature,
     });
   } catch (error) {
     console.error('OpenAI API error:', error);
@@ -374,10 +379,10 @@ async function generateAIResponse(
 
     const openaiClient = getOpenAIClient();
     const followUpResponse = await openaiClient.chat.completions.create({
-      model: 'gpt-4o',
+      model: OPENAI_MODEL_CLIENT,
       messages,
-      max_tokens: 150,
-      temperature: 0.7,
+      max_tokens: OPENAI_LIMITS.smsMaxTokens,
+      temperature: OPENAI_LIMITS.smsTemperature,
     });
 
     return {
