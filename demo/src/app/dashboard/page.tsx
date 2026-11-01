@@ -7,6 +7,7 @@ import { AssistantChat } from '@/components/dashboard/assistant-chat';
 import { SmsThread } from '@/components/dashboard/sms-thread';
 import { ClientInfoPanel } from '@/components/dashboard/client-info-panel';
 import { BusinessOverviewPanel } from '@/components/dashboard/business-overview-panel';
+import { PanelToggle } from '@/components/ui/panel-toggle';
 import { cn } from '@/lib/utils';
 import { 
   mockUser, 
@@ -18,6 +19,10 @@ import {
   mockMetrics,
   mockEscalations,
 } from '@/data/mock-data';
+import { useDemoData } from '@/contexts/demo-data-context';
+
+const LEFT_PANEL_STORAGE_KEY = 'demo-left-panel-open';
+const RIGHT_PANEL_STORAGE_KEY = 'demo-right-panel-open';
 
 interface Booking {
   id: string;
@@ -47,6 +52,7 @@ interface ClientStats {
 
 function DashboardContent() {
   const searchParams = useSearchParams();
+  const { services, updateService } = useDemoData();
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [isAssistantSelected, setIsAssistantSelected] = useState(true);
   const [trustedPhones, setTrustedPhones] = useState<string[]>(
@@ -54,6 +60,31 @@ function DashboardContent() {
   );
   const [mobileView, setMobileView] = useState<'list' | 'chat' | 'info'>('list');
   const [localMessages, setLocalMessages] = useState<Record<string, typeof mockConversations[0]['messages']>>({});
+  const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
+  const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
+
+  useEffect(() => {
+    const savedLeft = localStorage.getItem(LEFT_PANEL_STORAGE_KEY);
+    const savedRight = localStorage.getItem(RIGHT_PANEL_STORAGE_KEY);
+    if (savedLeft !== null) setIsLeftPanelOpen(savedLeft === 'true');
+    if (savedRight !== null) setIsRightPanelOpen(savedRight === 'true');
+  }, []);
+
+  const toggleLeftPanel = useCallback(() => {
+    setIsLeftPanelOpen((prev) => {
+      const newValue = !prev;
+      localStorage.setItem(LEFT_PANEL_STORAGE_KEY, String(newValue));
+      return newValue;
+    });
+  }, []);
+
+  const toggleRightPanel = useCallback(() => {
+    setIsRightPanelOpen((prev) => {
+      const newValue = !prev;
+      localStorage.setItem(RIGHT_PANEL_STORAGE_KEY, String(newValue));
+      return newValue;
+    });
+  }, []);
 
   useEffect(() => {
     const conversationParam = searchParams.get('conversation');
@@ -219,109 +250,136 @@ function DashboardContent() {
       <div className="flex-1 flex overflow-hidden">
         <div
           className={cn(
-            'w-full md:w-80 lg:w-96 flex-shrink-0',
+            'flex-shrink-0 transition-all duration-300 ease-in-out overflow-hidden',
+            isLeftPanelOpen ? 'w-full md:w-80 lg:w-96' : 'w-0',
             mobileView !== 'list' && 'hidden md:block'
           )}
         >
-          <ConversationList
-            conversations={conversationsWithBookings.map((c) => ({
-              ...c,
-              isTrusted: trustedPhones.includes(c.clientPhone.slice(-10)),
-            }))}
-            selectedId={selectedConversationId}
-            onSelect={handleConversationSelect}
-            isAssistantSelected={isAssistantSelected}
-            onAssistantSelect={handleAssistantSelect}
-            businessName={mockBusiness.name}
-          />
+          <div className="w-full md:w-80 lg:w-96 h-full">
+            <ConversationList
+              conversations={conversationsWithBookings.map((c) => ({
+                ...c,
+                isTrusted: trustedPhones.includes(c.clientPhone.slice(-10)),
+              }))}
+              selectedId={selectedConversationId}
+              onSelect={handleConversationSelect}
+              isAssistantSelected={isAssistantSelected}
+              onAssistantSelect={handleAssistantSelect}
+              businessName={mockBusiness.name}
+            />
+          </div>
         </div>
 
         <div
           className={cn(
-            'flex-1 min-w-0',
-            mobileView !== 'chat' && 'hidden md:block'
+            'flex-1 min-w-0 flex flex-col',
+            mobileView !== 'chat' && 'hidden md:flex'
           )}
         >
-          {isAssistantSelected ? (
-            <AssistantChat clientContext={null} />
-          ) : selectedConversation ? (
-            <SmsThread
-              messages={getMessages(selectedConversation.id)}
-              clientName={selectedConversation.clientName}
-              clientPhone={selectedConversation.clientPhone}
-              onSendMessage={handleSendMessage}
-              isAiActive={selectedConversation.state !== 'OWNER_TAKEOVER'}
-              onTakeOver={() => {
-                alert('Demo: You would now take over this conversation from the AI.');
-              }}
-              internalNotes={selectedConversation.internalNotes}
-            />
-          ) : (
-            <div className="h-full flex items-center justify-center bg-gray-50">
-              <div className="text-center text-gray-500">
-                <p className="text-lg font-medium">Welcome back, {mockUser.name.split(' ')[0]}!</p>
-                <p className="text-sm mt-1">
-                  Select a conversation or chat with your assistant
-                </p>
-              </div>
+          <div className="hidden md:flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-white">
+            <div className="flex items-center gap-2">
+              <PanelToggle
+                isOpen={isLeftPanelOpen}
+                onClick={toggleLeftPanel}
+                direction="left"
+                label={isLeftPanelOpen ? 'Hide conversations' : 'Show conversations'}
+              />
+              <span className="text-sm text-gray-500">
+                {isAssistantSelected
+                  ? 'Assistant'
+                  : selectedConversation?.clientName || 'Select a conversation'}
+              </span>
             </div>
-          )}
+            <PanelToggle
+              isOpen={isRightPanelOpen}
+              onClick={toggleRightPanel}
+              direction="right"
+              label={isRightPanelOpen ? 'Hide info panel' : 'Show info panel'}
+            />
+          </div>
+
+          <div className="flex-1 overflow-hidden">
+            {isAssistantSelected ? (
+              <AssistantChat
+                clientContext={null}
+                onServiceUpdate={updateService}
+                services={services}
+              />
+            ) : selectedConversation ? (
+              <SmsThread
+                messages={getMessages(selectedConversation.id)}
+                clientName={selectedConversation.clientName}
+                clientPhone={selectedConversation.clientPhone}
+                onSendMessage={handleSendMessage}
+                isAiActive={selectedConversation.state !== 'OWNER_TAKEOVER'}
+                onTakeOver={() => {
+                  alert('Demo: You would now take over this conversation from the AI.');
+                }}
+                internalNotes={selectedConversation.internalNotes}
+              />
+            ) : (
+              <div className="h-full flex items-center justify-center bg-gray-50">
+                <div className="text-center text-gray-500">
+                  <p className="text-lg font-medium">Welcome back, {mockUser.name.split(' ')[0]}!</p>
+                  <p className="text-sm mt-1">
+                    Select a conversation or chat with your assistant
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        {isAssistantSelected ? (
-          <div
-            className={cn(
-              'w-80 lg:w-96 flex-shrink-0',
-              mobileView !== 'info' && 'hidden lg:block'
-            )}
-          >
-            <BusinessOverviewPanel
-              businessName={mockBusiness.name}
-              metrics={mockMetrics}
-              recentEscalations={mockEscalations}
-              conversationAiStatuses={conversationsWithBookings.map((c) => ({
-                id: c.id,
-                clientName: c.clientName,
-                clientPhone: c.clientPhone,
-                state: c.state,
-                isAiHandling: c.state !== 'OWNER_TAKEOVER' && c.state !== 'ESCALATE',
-              }))}
-              onConversationSelect={handleConversationSelect}
-            />
+        <div
+          className={cn(
+            'flex-shrink-0 transition-all duration-300 ease-in-out overflow-hidden',
+            isRightPanelOpen ? 'w-80 lg:w-96' : 'w-0',
+            mobileView !== 'info' && 'hidden lg:block'
+          )}
+        >
+          <div className="w-80 lg:w-96 h-full">
+            {isAssistantSelected ? (
+              <BusinessOverviewPanel
+                businessName={mockBusiness.name}
+                metrics={mockMetrics}
+                recentEscalations={mockEscalations}
+                conversationAiStatuses={conversationsWithBookings.map((c) => ({
+                  id: c.id,
+                  clientName: c.clientName,
+                  clientPhone: c.clientPhone,
+                  state: c.state,
+                  isAiHandling: c.state !== 'OWNER_TAKEOVER' && c.state !== 'ESCALATE',
+                }))}
+                onConversationSelect={handleConversationSelect}
+              />
+            ) : selectedConversation ? (
+              <ClientInfoPanel
+                clientPhone={selectedConversation.clientPhone}
+                clientName={selectedConversation.clientName}
+                clientEmail={selectedConversation.bookings?.[0]?.clientEmail}
+                nextBooking={getNextBooking(selectedConversation)}
+                currentBooking={selectedConversation.bookings?.[0]}
+                stats={getClientStats(selectedConversation.clientPhone)}
+                isTrusted={trustedPhones.includes(selectedConversation.clientPhone.slice(-10))}
+                onToggleTrusted={handleToggleTrusted}
+                onReschedule={(bookingId) => {
+                  alert(`Demo: Reschedule booking ${bookingId}`);
+                }}
+                onCancel={(bookingId) => {
+                  alert(`Demo: Cancel booking ${bookingId}`);
+                }}
+                onSendReminder={(bookingId) => {
+                  alert(`Demo: Reminder sent for booking ${bookingId}`);
+                }}
+                onRequestDeposit={(bookingId) => {
+                  alert(`Demo: Deposit request sent for booking ${bookingId}`);
+                }}
+                notes={selectedConversation.bookings?.[0]?.notes}
+                calendarSynced={false}
+              />
+            ) : null}
           </div>
-        ) : selectedConversation ? (
-          <div
-            className={cn(
-              'w-80 lg:w-96 flex-shrink-0',
-              mobileView !== 'info' && 'hidden lg:block'
-            )}
-          >
-            <ClientInfoPanel
-              clientPhone={selectedConversation.clientPhone}
-              clientName={selectedConversation.clientName}
-              clientEmail={selectedConversation.bookings?.[0]?.clientEmail}
-              nextBooking={getNextBooking(selectedConversation)}
-              currentBooking={selectedConversation.bookings?.[0]}
-              stats={getClientStats(selectedConversation.clientPhone)}
-              isTrusted={trustedPhones.includes(selectedConversation.clientPhone.slice(-10))}
-              onToggleTrusted={handleToggleTrusted}
-              onReschedule={(bookingId) => {
-                alert(`Demo: Reschedule booking ${bookingId}`);
-              }}
-              onCancel={(bookingId) => {
-                alert(`Demo: Cancel booking ${bookingId}`);
-              }}
-              onSendReminder={(bookingId) => {
-                alert(`Demo: Reminder sent for booking ${bookingId}`);
-              }}
-              onRequestDeposit={(bookingId) => {
-                alert(`Demo: Deposit request sent for booking ${bookingId}`);
-              }}
-              notes={selectedConversation.bookings?.[0]?.notes}
-              calendarSynced={false}
-            />
-          </div>
-        ) : null}
+        </div>
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { mockBookings, mockBusiness } from '@/data/mock-data';
+import { ChiefAvatar } from './chief-avatar';
 
 interface Message {
   id: string;
@@ -18,9 +19,21 @@ interface ClientContext {
   name?: string;
 }
 
+interface Service {
+  id: string;
+  name: string;
+  description: string;
+  duration: number;
+  price: number;
+  isActive: boolean;
+  depositOverride: number | null;
+}
+
 interface AssistantChatProps {
   clientContext?: ClientContext | null;
   onActionComplete?: () => void;
+  onServiceUpdate?: (serviceId: string, updates: { name?: string; price?: number; duration?: number }) => void;
+  services?: Service[];
 }
 
 const SUGGESTED_PROMPTS = [
@@ -37,7 +50,13 @@ const CLIENT_CONTEXT_PROMPTS = [
   "Add to trusted clients",
 ];
 
-function getMockResponse(query: string, clientContext?: ClientContext | null): string {
+function getMockResponse(
+  query: string,
+  clientContext?: ClientContext | null,
+  onServiceUpdate?: (serviceId: string, updates: { name?: string; price?: number; duration?: number }) => void,
+  services?: Service[]
+): { response: string; action?: () => void } {
+  const serviceList = services || [];
   const lowerQuery = query.toLowerCase();
 
   if (clientContext) {
@@ -46,35 +65,67 @@ function getMockResponse(query: string, clientContext?: ClientContext | null): s
         (b) => b.clientPhone === clientContext.phone
       );
       if (bookings.length === 0) {
-        return `${clientContext.name || 'This client'} has no booking history yet.`;
+        return { response: `${clientContext.name || 'This client'} has no booking history yet.` };
       }
-      return `${clientContext.name || 'This client'} has ${bookings.length} booking(s):\n\n${bookings
-        .map(
-          (b) =>
-            `• ${b.serviceName} on ${format(new Date(b.startTime), 'MMM d')} at ${format(
-              new Date(b.startTime),
-              'h:mm a'
-            )} (${b.status})`
-        )
-        .join('\n')}`;
+      return {
+        response: `${clientContext.name || 'This client'} has ${bookings.length} booking(s):\n\n${bookings
+          .map(
+            (b) =>
+              `• ${b.serviceName} on ${format(new Date(b.startTime), 'MMM d')} at ${format(
+                new Date(b.startTime),
+                'h:mm a'
+              )} (${b.status})`
+          )
+          .join('\n')}`,
+      };
     }
     if (lowerQuery.includes('reminder')) {
-      return `I've sent a reminder to ${clientContext.name || clientContext.phone} about their upcoming appointment.`;
+      return { response: `I've sent a reminder to ${clientContext.name || clientContext.phone} about their upcoming appointment.` };
     }
     if (lowerQuery.includes('deposit') && lowerQuery.includes('paid')) {
-      return `Done! I've marked the deposit as paid for ${clientContext.name || clientContext.phone}.`;
+      return { response: `Done! I've marked the deposit as paid for ${clientContext.name || clientContext.phone}.` };
     }
     if (lowerQuery.includes('trusted')) {
-      return `${clientContext.name || clientContext.phone} has been added to your trusted clients list. They will be exempt from deposit requirements.`;
+      return { response: `${clientContext.name || clientContext.phone} has been added to your trusted clients list. They will be exempt from deposit requirements.` };
+    }
+  }
+
+  // Handle service price changes
+  const priceMatch = lowerQuery.match(/(?:change|set|update)\s+(?:the\s+)?(\w+(?:\s+\w+)?)\s+(?:price\s+)?to\s+\$?(\d+)/i);
+  if (priceMatch && onServiceUpdate && serviceList.length > 0) {
+    const serviceName = priceMatch[1].toLowerCase();
+    const newPrice = parseInt(priceMatch[2], 10);
+    const service = serviceList.find((s) => s.name.toLowerCase().includes(serviceName));
+    if (service) {
+      return {
+        response: `Done! I've updated the ${service.name} price from $${service.price} to $${newPrice}. The Services tab now reflects this change.`,
+        action: () => onServiceUpdate(service.id, { price: newPrice }),
+      };
+    }
+  }
+
+  // Handle service duration changes
+  const durationMatch = lowerQuery.match(/(?:change|set|update)\s+(?:the\s+)?(\w+(?:\s+\w+)?)\s+(?:duration\s+)?to\s+(\d+)\s*(?:min|minutes?)?/i);
+  if (durationMatch && onServiceUpdate && serviceList.length > 0) {
+    const serviceName = durationMatch[1].toLowerCase();
+    const newDuration = parseInt(durationMatch[2], 10);
+    const service = serviceList.find((s) => s.name.toLowerCase().includes(serviceName));
+    if (service) {
+      return {
+        response: `Done! I've updated the ${service.name} duration from ${service.duration} minutes to ${newDuration} minutes. The Services tab now reflects this change.`,
+        action: () => onServiceUpdate(service.id, { duration: newDuration }),
+      };
     }
   }
 
   if (lowerQuery.includes('revenue')) {
     const completedBookings = mockBookings.filter((b) => b.status === 'COMPLETED');
     const revenue = completedBookings.reduce((sum, b) => sum + b.price, 0);
-    return `Your revenue this month is $${revenue} from ${completedBookings.length} completed bookings. ${
-      completedBookings.filter((b) => b.depositStatus === 'PAID').length
-    } clients paid deposits.`;
+    return {
+      response: `Your revenue this month is $${revenue} from ${completedBookings.length} completed bookings. ${
+        completedBookings.filter((b) => b.depositStatus === 'PAID').length
+      } clients paid deposits.`,
+    };
   }
 
   if (lowerQuery.includes('tomorrow') || lowerQuery.includes('booked')) {
@@ -90,15 +141,17 @@ function getMockResponse(query: string, clientContext?: ClientContext | null): s
     });
 
     if (tomorrowBookings.length === 0) {
-      return "You don't have any bookings scheduled for tomorrow.";
+      return { response: "You don't have any bookings scheduled for tomorrow." };
     }
 
-    return `Tomorrow's bookings:\n\n${tomorrowBookings
-      .map(
-        (b) =>
-          `• ${b.clientName}: ${b.serviceName} at ${format(new Date(b.startTime), 'h:mm a')}`
-      )
-      .join('\n')}`;
+    return {
+      response: `Tomorrow's bookings:\n\n${tomorrowBookings
+        .map(
+          (b) =>
+            `• ${b.clientName}: ${b.serviceName} at ${format(new Date(b.startTime), 'h:mm a')}`
+        )
+        .join('\n')}`,
+    };
   }
 
   if (lowerQuery.includes('unpaid') || lowerQuery.includes('pending deposit')) {
@@ -106,43 +159,51 @@ function getMockResponse(query: string, clientContext?: ClientContext | null): s
       (b) => b.depositStatus === 'PENDING'
     );
     if (pendingDeposits.length === 0) {
-      return 'Great news! All pending deposits have been paid.';
+      return { response: 'Great news! All pending deposits have been paid.' };
     }
-    return `${pendingDeposits.length} booking(s) have unpaid deposits:\n\n${pendingDeposits
-      .map(
-        (b) =>
-          `• ${b.clientName}: ${b.serviceName} on ${format(
-            new Date(b.startTime),
-            'MMM d'
-          )} ($${(b.depositAmount || 0) / 100} due)`
-      )
-      .join('\n')}\n\nWould you like me to send payment reminders?`;
+    return {
+      response: `${pendingDeposits.length} booking(s) have unpaid deposits:\n\n${pendingDeposits
+        .map(
+          (b) =>
+            `• ${b.clientName}: ${b.serviceName} on ${format(
+              new Date(b.startTime),
+              'MMM d'
+            )} ($${(b.depositAmount || 0) / 100} due)`
+        )
+        .join('\n')}\n\nWould you like me to send payment reminders?`,
+    };
   }
 
   if (lowerQuery.includes('trusted') && lowerQuery.includes('add')) {
-    return `To add a trusted client, please provide their phone number and name. Trusted clients are exempt from deposit requirements.`;
+    return { response: `To add a trusted client, please provide their phone number and name. Trusted clients are exempt from deposit requirements.` };
   }
 
   if (lowerQuery.includes('settings')) {
-    return `Current settings:\n• Deposits: ${mockBusiness.depositsEnabled ? 'Enabled' : 'Disabled'}\n• Default deposit: $${(mockBusiness.defaultDepositAmount || 0) / 100}\n• Hold time: ${mockBusiness.depositHoldMinutes} minutes\n• Reminder: ${mockBusiness.reminderHoursBefore || 24} hours before`;
+    return {
+      response: `Current settings:\n• Deposits: ${mockBusiness.depositsEnabled ? 'Enabled' : 'Disabled'}\n• Default deposit: $${(mockBusiness.defaultDepositAmount || 0) / 100}\n• Hold time: ${mockBusiness.depositHoldMinutes} minutes\n• Reminder: ${mockBusiness.reminderHoursBefore || 24} hours before`,
+    };
   }
 
   if (lowerQuery.includes('help') || lowerQuery.includes('can you')) {
-    return `I can help you with:\n\n• Viewing and managing bookings\n• Checking revenue and statistics\n• Managing client information\n• Sending messages to clients\n• Managing trusted clients (deposit exemptions)\n• Updating business settings\n\nWhat would you like to do?`;
+    return {
+      response: `I can help you with:\n\n• Viewing and managing bookings\n• Checking revenue and statistics\n• Managing client information\n• Sending messages to clients\n• Managing trusted clients (deposit exemptions)\n• Updating business settings\n\nWhat would you like to do?`,
+    };
   }
 
   if (lowerQuery.includes('cancel')) {
-    return `CONFIRMATION REQUIRED: Please specify which booking you'd like to cancel. You can say something like "cancel Emily's appointment" or "cancel the 2pm booking".`;
+    return { response: `CONFIRMATION REQUIRED: Please specify which booking you'd like to cancel. You can say something like "cancel Emily's appointment" or "cancel the 2pm booking".` };
   }
 
   if (lowerQuery.includes('reschedule')) {
-    return `CONFIRMATION REQUIRED: Please specify which booking you'd like to reschedule and the new time. For example: "reschedule Emily's appointment to Friday at 3pm".`;
+    return { response: `CONFIRMATION REQUIRED: Please specify which booking you'd like to reschedule and the new time. For example: "reschedule Emily's appointment to Friday at 3pm".` };
   }
 
-  return `I understand you're asking about "${query}". In the full version, I can help you manage bookings, check revenue, send messages, and more. Try asking:\n\n• "What's my revenue this month?"\n• "Who's booked for tomorrow?"\n• "Show unpaid deposits"`;
+  return {
+    response: `I understand you're asking about "${query}". In the full version, I can help you manage bookings, check revenue, send messages, and more. Try asking:\n\n• "What's my revenue this month?"\n• "Who's booked for tomorrow?"\n• "Show unpaid deposits"`,
+  };
 }
 
-export function AssistantChat({ clientContext, onActionComplete }: AssistantChatProps) {
+export function AssistantChat({ clientContext, onActionComplete, onServiceUpdate, services }: AssistantChatProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',
@@ -201,7 +262,11 @@ export function AssistantChat({ clientContext, onActionComplete }: AssistantChat
 
     await new Promise((resolve) => setTimeout(resolve, 800 + Math.random() * 400));
 
-    const response = getMockResponse(userQuery, clientContext);
+    const result = getMockResponse(userQuery, clientContext, onServiceUpdate, services);
+
+    if (result.action) {
+      result.action();
+    }
 
     setMessages((prev) =>
       prev
@@ -209,7 +274,7 @@ export function AssistantChat({ clientContext, onActionComplete }: AssistantChat
         .concat({
           id: `assistant-${Date.now()}`,
           role: 'assistant',
-          content: response,
+          content: result.response,
           timestamp: new Date(),
         })
     );
@@ -217,7 +282,7 @@ export function AssistantChat({ clientContext, onActionComplete }: AssistantChat
     setIsLoading(false);
     inputRef.current?.focus();
 
-    if (onActionComplete && (userQuery.includes('paid') || userQuery.includes('trusted'))) {
+    if (onActionComplete && (userQuery.includes('paid') || userQuery.includes('trusted') || result.action)) {
       onActionComplete();
     }
   };
@@ -236,10 +301,13 @@ export function AssistantChat({ clientContext, onActionComplete }: AssistantChat
           <div
             key={message.id}
             className={cn(
-              'flex',
+              'flex gap-2',
               message.role === 'user' ? 'justify-end' : 'justify-start'
             )}
           >
+            {message.role === 'assistant' && (
+              <ChiefAvatar size="sm" showBadge={false} className="flex-shrink-0 mt-1" />
+            )}
             <div
               className={cn(
                 'max-w-[80%] rounded-2xl px-4 py-2',

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { ChiefAvatar } from './chief-avatar';
 
 type FilterType = 'all' | 'upcoming' | 'needs_attention' | 'unpaid_deposit';
 
@@ -112,14 +113,7 @@ export function ConversationList({
           isAssistantSelected && 'bg-blue-50'
         )}
       >
-        <div className="relative w-20 h-20 mx-auto mb-3">
-          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-indigo-600 flex items-center justify-center shadow-lg">
-            <span className="text-white text-3xl">🤖</span>
-          </div>
-          <div className="absolute -top-1 -right-1 w-7 h-7 bg-yellow-400 rounded-full flex items-center justify-center shadow-md border-2 border-white">
-            <span className="text-sm">⭐</span>
-          </div>
-        </div>
+        <ChiefAvatar size="lg" showBadge className="mx-auto mb-3" />
         <h2 className="font-bold text-gray-900 text-lg">Chief Assistant</h2>
         <p className="text-sm text-gray-500">{businessName}</p>
         {needsAttentionCount > 0 && (
