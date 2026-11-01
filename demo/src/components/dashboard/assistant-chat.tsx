@@ -40,7 +40,7 @@ const SUGGESTED_PROMPTS = [
   "What's my revenue this month?",
   "Who's booked for tomorrow?",
   "Show unpaid deposits",
-  "Add a trusted client",
+  "Import my info from mysite.com",
 ];
 
 const CLIENT_CONTEXT_PROMPTS = [
@@ -116,6 +116,12 @@ function getMockResponse(
         action: () => onServiceUpdate(service.id, { duration: newDuration }),
       };
     }
+  }
+
+  if (lowerQuery.includes('import') && (lowerQuery.includes('http') || lowerQuery.includes('.com') || lowerQuery.includes('site'))) {
+    return {
+      response: `I can import your business details from a website or document. Open the Business Info tab and use Auto-fill with AI to review the extracted name, address, hours, services, policies, and FAQs before anything is saved.`,
+    };
   }
 
   if (lowerQuery.includes('revenue')) {

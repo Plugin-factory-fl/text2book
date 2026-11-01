@@ -109,19 +109,21 @@ export function ConversationList({
       <button
         onClick={onAssistantSelect}
         className={cn(
-          'p-6 border-b-2 border-gray-200 hover:bg-blue-50/50 transition-colors text-center',
+          'p-6 border-b-2 border-gray-200 hover:bg-blue-50/50 transition-colors',
           isAssistantSelected && 'bg-blue-50'
         )}
       >
-        <ChiefAvatar size="lg" showBadge className="mx-auto mb-3" />
-        <h2 className="font-bold text-gray-900 text-lg">Chief Assistant</h2>
-        <p className="text-sm text-gray-500">{businessName}</p>
-        {needsAttentionCount > 0 && (
-          <div className="mt-2 inline-flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
-            <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse" />
-            {needsAttentionCount} need{needsAttentionCount === 1 ? 's' : ''} attention
-          </div>
-        )}
+        <div className="flex flex-col items-center">
+          <ChiefAvatar size="lg" showBadge className="mb-3" />
+          <h2 className="font-bold text-gray-900 text-lg">Chief Assistant</h2>
+          <p className="text-sm text-gray-500">{businessName}</p>
+          {needsAttentionCount > 0 && (
+            <div className="mt-2 inline-flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
+              <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse" />
+              {needsAttentionCount} need{needsAttentionCount === 1 ? 's' : ''} attention
+            </div>
+          )}
+        </div>
       </button>
 
       {/* Search and Filters */}

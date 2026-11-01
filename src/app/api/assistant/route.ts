@@ -4,13 +4,9 @@ import prisma from '@/lib/prisma';
 import OpenAI from 'openai';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, parseISO, addDays } from 'date-fns';
 import { sendSms } from '@/services/twilio';
-
-function getOpenAIClient(): OpenAI | null {
-  if (!process.env.OPENAI_API_KEY) {
-    return null;
-  }
-  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-}
+import { getOpenAIClient, OPENAI_LIMITS, OPENAI_MODEL_OWNER, trimConversationHistory } from '@/lib/openai';
+import { extractBusinessInfo } from '@/services/business-import';
+import { applyExtractedBusinessInfo } from '@/services/business-import-apply';
 
 const OWNER_ASSISTANT_FUNCTIONS: OpenAI.Chat.ChatCompletionCreateParams.Function[] = [
   {
@@ -165,6 +161,18 @@ const OWNER_ASSISTANT_FUNCTIONS: OpenAI.Chat.ChatCompletionCreateParams.Function
         booking_id: { type: 'string' },
       },
       required: ['booking_id'],
+    },
+  },
+  {
+    name: 'import_business_info',
+    description: 'Import business details, hours, services, policies, and FAQs from a website URL. Requires confirmation before saving.',
+    parameters: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'Public https website URL' },
+        confirmed: { type: 'boolean', description: 'Set true only after the owner confirms applying the extracted values' },
+      },
+      required: ['url'],
     },
   },
 ];
@@ -375,6 +383,30 @@ async function executeFunctionCall(
         return `Marked deposit as paid for ${booking.clientName}'s ${booking.serviceName} booking.`;
       }
 
+      case 'import_business_info': {
+        const url = String(args.url || '').trim();
+        if (!url) return 'Please provide a website URL.';
+        const result = await extractBusinessInfo({ url });
+        if (!args.confirmed) {
+          return `CONFIRMATION REQUIRED: Extracted from ${url}. Name: ${result.extracted.businessName || 'unknown'}. Phone: ${result.extracted.phone || 'unknown'}. Services: ${(result.extracted.services || []).map((s) => s.name).join(', ') || 'none'}. FAQs: ${result.extracted.faqs?.length || 0}. Reply "confirm" to apply these to Business Info. Nothing is saved until you confirm.`;
+        }
+        const applied = await applyExtractedBusinessInfo(businessId, result.extracted, {
+          businessName: true,
+          description: true,
+          address: true,
+          city: true,
+          state: true,
+          zipCode: true,
+          phone: true,
+          cancellationPolicy: true,
+          depositPolicy: true,
+          hours: true,
+          services: true,
+          faqs: true,
+        });
+        return `Applied imported business info. Updated: ${applied.updatedFields.join(', ') || 'nothing'}.`;
+      }
+
       case 'send_deposit_reminder': {
         const booking = await prisma.booking.findFirst({
           where: { id: String(args.booking_id), businessId },
@@ -438,6 +470,13 @@ export async function POST(request: NextRequest) {
     }
 
     const { message, conversationHistory = [], clientContext } = await request.json();
+    const trimmedHistory = trimConversationHistory(
+      (conversationHistory as Array<{ role: string; content: string }>).map((m) => ({
+        role: m.role,
+        content: m.content,
+      })),
+      OPENAI_LIMITS.historyWindow
+    );
 
     const openai = getOpenAIClient();
     if (!openai) {
@@ -456,6 +495,7 @@ You can help with:
 - Sending messages to clients
 - Managing trusted clients (deposit exemptions)
 - Updating business settings
+- Importing business info from a website (review and confirm before saving)
 
 ${clientContext ? `Currently viewing client: ${clientContext.name || clientContext.phone}` : ''}
 
@@ -465,7 +505,10 @@ Current date/time: ${format(new Date(), 'EEEE, MMMM d, yyyy h:mm a')}`;
 
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
-      ...conversationHistory.map((m: { role: string; content: string }) => ({
+      ...(trimmedHistory.summary
+        ? [{ role: 'system' as const, content: trimmedHistory.summary }]
+        : []),
+      ...trimmedHistory.recent.map((m) => ({
         role: m.role as 'user' | 'assistant',
         content: m.content,
       })),
@@ -473,12 +516,12 @@ Current date/time: ${format(new Date(), 'EEEE, MMMM d, yyyy h:mm a')}`;
     ];
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: OPENAI_MODEL_OWNER,
       messages,
       functions: OWNER_ASSISTANT_FUNCTIONS,
       function_call: 'auto',
-      max_tokens: 500,
-      temperature: 0.7,
+      max_tokens: OPENAI_LIMITS.ownerMaxTokens,
+      temperature: OPENAI_LIMITS.ownerTemperature,
     });
 
     const choice = response.choices[0];
@@ -504,10 +547,10 @@ Current date/time: ${format(new Date(), 'EEEE, MMMM d, yyyy h:mm a')}`;
       ];
 
       const followUpResponse = await openai.chat.completions.create({
-        model: 'gpt-4o',
+        model: OPENAI_MODEL_OWNER,
         messages: followUpMessages,
-        max_tokens: 300,
-        temperature: 0.7,
+        max_tokens: OPENAI_LIMITS.ownerMaxTokens,
+        temperature: OPENAI_LIMITS.ownerTemperature,
       });
 
       return NextResponse.json({

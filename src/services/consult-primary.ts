@@ -61,7 +61,8 @@ export async function consultPrimary(
 
 /**
  * Generate a response from the primary assistant.
- * In a real implementation, this would call the AI model with full owner context.
+ * Consult sanitizing is local (no LLM call). If a model is added for consult
+ * sanitizing or rewrite, use OPENAI_MODEL_CLIENT from @/lib/openai.
  */
 async function generatePrimaryResponse(conversationId: string, question: string): Promise<string> {
   const directives = await getActiveDirectives(conversationId);

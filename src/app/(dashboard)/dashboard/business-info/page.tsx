@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { BusinessAutofill } from '@/components/dashboard/business-autofill';
 
 interface FAQ {
   id: string;
@@ -11,8 +12,21 @@ interface FAQ {
   answer: string;
 }
 
+interface BusinessDetails {
+  name: string;
+  description: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zipCode: string | null;
+  phone: string | null;
+  cancellationPolicy: string | null;
+  depositPolicyText: string | null;
+}
+
 export default function BusinessInfoPage() {
   const [faqs, setFaqs] = useState<FAQ[]>([]);
+  const [business, setBusiness] = useState<BusinessDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -23,7 +37,7 @@ export default function BusinessInfoPage() {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    fetchFAQs();
+    fetchPageData();
   }, []);
 
   const fetchFAQs = async () => {
@@ -35,6 +49,24 @@ export default function BusinessInfoPage() {
       }
     } catch (error) {
       console.error('Failed to fetch FAQs:', error);
+    }
+  };
+
+  const fetchPageData = async () => {
+    try {
+      const [faqRes, businessRes] = await Promise.all([
+        fetch('/api/faqs'),
+        fetch('/api/business'),
+      ]);
+      if (faqRes.ok) {
+        setFaqs(await faqRes.json());
+      }
+      if (businessRes.ok) {
+        const data = await businessRes.json();
+        setBusiness(data.business);
+      }
+    } catch (error) {
+      console.error('Failed to load business info:', error);
     } finally {
       setIsLoading(false);
     }
@@ -109,6 +141,23 @@ export default function BusinessInfoPage() {
           <Button onClick={() => setShowForm(true)}>Add Entry</Button>
         )}
       </div>
+
+      {business && (
+        <BusinessAutofill
+          current={{
+            businessName: business.name,
+            description: business.description,
+            address: business.address,
+            city: business.city,
+            state: business.state,
+            zipCode: business.zipCode,
+            phone: business.phone,
+            cancellationPolicy: business.cancellationPolicy,
+            depositPolicy: business.depositPolicyText,
+          }}
+          onApplied={fetchPageData}
+        />
+      )}
 
       {showForm && (
         <Card>

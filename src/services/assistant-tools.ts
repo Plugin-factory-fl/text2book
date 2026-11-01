@@ -10,6 +10,8 @@
 import prisma from '@/lib/prisma';
 import { createBooking, cancelBooking, rescheduleBooking, CreateBookingParams } from './booking';
 import { format, parseISO, addMinutes } from 'date-fns';
+import { extractBusinessInfo } from './business-import';
+import { applyExtractedBusinessInfo } from './business-import-apply';
 
 export interface ToolResult {
   success: boolean;
@@ -746,6 +748,48 @@ export async function updateClientName(
   };
 }
 
+export async function importBusinessInfoTool(
+  ctx: AssistantToolContext,
+  url: string,
+  confirmed?: boolean
+): Promise<ToolResult> {
+  if (!url) {
+    return { success: false, message: 'Provide a website URL to import from' };
+  }
+
+  const result = await extractBusinessInfo({ url });
+
+  if (!confirmed) {
+    return {
+      success: true,
+      requiresConfirmation: true,
+      confirmationPrompt: `I extracted business info from ${url}. Name: ${result.extracted.businessName || 'unknown'}. Confirm to apply it. Nothing is saved until you confirm.`,
+      data: result.extracted,
+    };
+  }
+
+  const applied = await applyExtractedBusinessInfo(ctx.businessId, result.extracted, {
+    businessName: true,
+    description: true,
+    address: true,
+    city: true,
+    state: true,
+    zipCode: true,
+    phone: true,
+    cancellationPolicy: true,
+    depositPolicy: true,
+    hours: true,
+    services: true,
+    faqs: true,
+  });
+
+  return {
+    success: true,
+    message: `Imported business info from ${url}. Updated ${applied.updatedFields.join(', ') || 'no fields'}.`,
+    data: applied,
+  };
+}
+
 // === TOOL DEFINITIONS FOR OPENAI ===
 
 export const ASSISTANT_TOOL_DEFINITIONS = [
@@ -1092,6 +1136,21 @@ export const ASSISTANT_TOOL_DEFINITIONS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'import_business_info',
+      description: 'Import business details from a website URL. Requires confirmation before saving anything.',
+      parameters: {
+        type: 'object',
+        properties: {
+          url: { type: 'string', description: 'Public http(s) website URL' },
+          confirmed: { type: 'boolean', description: 'Confirm applying the extracted values' },
+        },
+        required: ['url'],
+      },
+    },
+  },
 ];
 
 // === TOOL EXECUTOR ===
@@ -1150,6 +1209,8 @@ export async function executeAssistantTool(
       return getClientInfo(ctx, args.clientPhone as string);
     case 'update_client_name':
       return updateClientName(ctx, args as any);
+    case 'import_business_info':
+      return importBusinessInfoTool(ctx, args.url as string, args.confirmed as boolean);
     default:
       return { success: false, message: `Unknown tool: ${toolName}` };
   }

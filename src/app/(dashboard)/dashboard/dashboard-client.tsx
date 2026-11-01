@@ -284,7 +284,7 @@ export function DashboardClient({
             mobileView !== 'list' && 'hidden md:block'
           )}
         >
-          <div className={cn('h-full', !isLeftPanelOpen && 'hidden')}>
+          <div className={cn('h-full border-r border-gray-200 bg-white shadow-sm', !isLeftPanelOpen && 'hidden')}>
             <ConversationList
               conversations={conversations.map((c) => ({
                 ...c,
@@ -326,7 +326,7 @@ export function DashboardClient({
               isOpen={isRightPanelOpen}
               onClick={toggleRightPanel}
               direction="right"
-              label={isRightPanelOpen ? 'Hide details' : 'Show details'}
+              label={isRightPanelOpen ? 'Hide info panel' : 'Show info panel'}
               className="hidden lg:block"
             />
           </div>
@@ -373,12 +373,12 @@ export function DashboardClient({
         {/* Right Panel (Info/Overview) */}
         <div
           className={cn(
-            'flex-shrink-0 transition-all duration-300 ease-in-out border-l border-gray-200',
+            'flex-shrink-0 transition-all duration-300 ease-in-out',
             isRightPanelOpen ? 'w-80 lg:w-96' : 'w-0',
             mobileView !== 'info' && 'hidden lg:block'
           )}
         >
-          <div className={cn('h-full', !isRightPanelOpen && 'hidden')}>
+          <div className={cn('h-full border-l border-gray-200 bg-white shadow-sm rounded-l-lg overflow-hidden', !isRightPanelOpen && 'hidden')}>
             {isAssistantSelected && metrics ? (
               <div className="h-full flex flex-col">
                 <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-white">
@@ -387,7 +387,7 @@ export function DashboardClient({
                     isOpen={isRightPanelOpen}
                     onClick={toggleRightPanel}
                     direction="right"
-                    label="Hide panel"
+                    label="Hide info panel"
                   />
                 </div>
                 <div className="flex-1 overflow-hidden">
@@ -414,7 +414,7 @@ export function DashboardClient({
                     isOpen={isRightPanelOpen}
                     onClick={toggleRightPanel}
                     direction="right"
-                    label="Hide panel"
+                    label="Hide info panel"
                   />
                 </div>
                 <div className="flex-1 overflow-hidden">

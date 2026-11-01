@@ -255,7 +255,7 @@ function DashboardContent() {
             mobileView !== 'list' && 'hidden md:block'
           )}
         >
-          <div className="w-full md:w-80 lg:w-96 h-full">
+          <div className="w-full md:w-80 lg:w-96 h-full border-r border-gray-200 bg-white shadow-sm">
             <ConversationList
               conversations={conversationsWithBookings.map((c) => ({
                 ...c,
@@ -337,7 +337,7 @@ function DashboardContent() {
             mobileView !== 'info' && 'hidden lg:block'
           )}
         >
-          <div className="w-80 lg:w-96 h-full">
+          <div className="w-80 lg:w-96 h-full border-l border-gray-200 bg-white shadow-sm rounded-l-lg">
             {isAssistantSelected ? (
               <BusinessOverviewPanel
                 businessName={mockBusiness.name}
