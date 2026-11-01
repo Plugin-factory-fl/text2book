@@ -78,6 +78,19 @@ model Business {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
+  // Stripe Connect for receiving deposit payments
+  stripeAccountId         String?  @unique
+  stripeOnboardingComplete Boolean  @default(false)
+
+  // Deposit settings
+  depositsEnabled         Boolean  @default(false)
+  defaultDepositAmount    Int?     // in cents (e.g. 1500 = $15)
+  depositHoldMinutes      Int      @default(30)
+  depositPolicyText       String?  @db.Text // e.g. "Deposit is non-refundable on no-show and applied toward your service"
+
+  // Platform fee (configurable, 0 for now)
+  platformFeePercent      Float    @default(0)
+
   user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   services          Service[]
   availabilityRules AvailabilityRule[]
@@ -86,6 +99,7 @@ model Business {
   bookings          Booking[]
   conversations     Conversation[]
   calendarConnection CalendarConnection?
+  trustedClients    TrustedClient[]
 }
 
 model Service {
@@ -99,6 +113,9 @@ model Service {
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  // Per-service deposit override (null = use business default, 0 = no deposit required)
+  depositOverride Int?     // in cents; null means use business default
 
   business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
   bookings Booking[]
@@ -187,21 +204,39 @@ model Booking {
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
-  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  service      Service?      @relation(fields: [serviceId], references: [id], onDelete: SetNull)
-  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  // Deposit tracking
+  depositRequired  Boolean       @default(false)
+  depositAmount    Int?          // in cents
+  depositStatus    DepositStatus @default(NOT_REQUIRED)
+  depositPaidAt    DateTime?
+  depositExpiresAt DateTime?     // when the hold expires if unpaid
+
+  business     Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  service      Service?        @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  conversation Conversation?   @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  depositPayment DepositPayment?
 
   @@index([businessId])
   @@index([startTime])
   @@index([clientPhone])
+  @@index([depositExpiresAt])
 }
 
 enum BookingStatus {
   PENDING
+  AWAITING_DEPOSIT
   CONFIRMED
   CANCELLED
   COMPLETED
   NO_SHOW
+}
+
+enum DepositStatus {
+  NOT_REQUIRED
+  PENDING
+  PAID
+  EXPIRED
+  REFUNDED
 }
 
 model Conversation {
@@ -236,6 +271,7 @@ enum ConversationState {
   RESCHEDULE
   CANCEL
   ESCALATE
+  OWNER_TAKEOVER
 }
 
 model Message {
@@ -244,7 +280,8 @@ model Message {
   direction      MessageDir
   content        String      @db.Text
   twilioSid      String?
-  status         String?     // delivered, failed, etc.
+  status         String?
+  isAi           Boolean     @default(true)
   createdAt      DateTime    @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -291,4 +328,37 @@ model ScheduledReminder {
   createdAt   DateTime @default(now())
 
   @@index([sendAt, sent])
+}
+
+model TrustedClient {
+  id          String   @id @default(cuid())
+  businessId  String
+  phone       String
+  name        String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, phone])
+  @@index([businessId])
+  @@index([phone])
+}
+
+model DepositPayment {
+  id                    String   @id @default(cuid())
+  bookingId             String   @unique
+  stripeCheckoutSessionId String?  @unique
+  stripePaymentIntentId String?  @unique
+  amount                Int      // in cents
+  status                String   @default("pending") // pending, paid, refunded, expired
+  paidAt                DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([stripeCheckoutSessionId])
+  @@index([stripePaymentIntentId])
 }

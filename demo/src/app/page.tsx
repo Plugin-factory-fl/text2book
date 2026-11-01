@@ -4,11 +4,6 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
 export default function HomePage() {
-  const getHref = (href: string) => {
-    const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
-    return `${basePath}${href}`;
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="max-w-4xl mx-auto px-4 py-16 sm:py-24">
@@ -54,7 +49,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            <Link href={getHref('/dashboard')}>
+            <Link href="/dashboard">
               <Button size="lg" className="w-full sm:w-auto">
                 Enter Demo Dashboard
               </Button>
@@ -69,7 +64,7 @@ export default function HomePage() {
               See what new users experience when setting up their business,
               connecting Google Calendar, and configuring services.
             </p>
-            <Link href={getHref('/onboarding')}>
+            <Link href="/onboarding">
               <Button variant="outline" size="lg" className="w-full sm:w-auto">
                 View Onboarding Wizard
               </Button>

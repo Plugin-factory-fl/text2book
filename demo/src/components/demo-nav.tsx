@@ -19,15 +19,10 @@ const navItems = [
 export function DemoNav() {
   const pathname = usePathname();
 
-  const getHref = (href: string) => {
-    const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
-    return `${basePath}${href}`;
-  };
-
   const isActive = (href: string) => {
-    const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
-    const normalizedPathname = pathname.replace(basePath, '');
-    return normalizedPathname === href || normalizedPathname === `${href}/`;
+    const normalizedPathname = pathname.replace(/\/$/, '');
+    const normalizedHref = href.replace(/\/$/, '');
+    return normalizedPathname === normalizedHref;
   };
 
   return (
@@ -36,7 +31,7 @@ export function DemoNav() {
         <div className="flex justify-between h-16">
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
-              <Link href={getHref('/dashboard')} className="text-xl font-bold text-blue-600">
+              <Link href="/dashboard" className="text-xl font-bold text-blue-600">
                 Text2Book
               </Link>
               <span className="ml-2 px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
@@ -47,7 +42,7 @@ export function DemoNav() {
               {navItems.map((item) => (
                 <Link
                   key={item.href}
-                  href={getHref(item.href)}
+                  href={item.href}
                   className={cn(
                     'inline-flex items-center px-3 py-2 text-sm font-medium rounded-md',
                     isActive(item.href)
@@ -65,7 +60,7 @@ export function DemoNav() {
               {mockUser.name}
             </span>
             <Link
-              href={getHref('/')}
+              href="/"
               className="text-sm text-gray-600 hover:text-gray-900"
             >
               Exit Demo
@@ -80,7 +75,7 @@ export function DemoNav() {
           {navItems.map((item) => (
             <Link
               key={item.href}
-              href={getHref(item.href)}
+              href={item.href}
               className={cn(
                 'flex-shrink-0 px-3 py-2 text-sm font-medium rounded-md whitespace-nowrap',
                 isActive(item.href)

@@ -1,167 +1,280 @@
 'use client';
 
-import Link from 'next/link';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { format } from 'date-fns';
-import { formatPhoneNumber } from '@/lib/utils';
-import { mockUser, mockBusiness, mockBookings, mockConversations, mockSubscription } from '@/data/mock-data';
+import { useState, useCallback } from 'react';
+import { ConversationList } from '@/components/dashboard/conversation-list';
+import { AssistantChat } from '@/components/dashboard/assistant-chat';
+import { SmsThread } from '@/components/dashboard/sms-thread';
+import { ClientInfoPanel } from '@/components/dashboard/client-info-panel';
+import { cn } from '@/lib/utils';
+import { mockUser, mockConversations, mockBookings, mockTrustedClients } from '@/data/mock-data';
+
+interface Booking {
+  id: string;
+  clientName: string;
+  clientPhone: string;
+  clientEmail?: string | null;
+  serviceName: string;
+  duration: number;
+  price: number;
+  startTime: string;
+  endTime: string;
+  status: string;
+  notes?: string | null;
+  depositRequired?: boolean;
+  depositAmount?: number | null;
+  depositStatus?: string;
+}
+
+interface ClientStats {
+  totalVisits: number;
+  lifetimeRevenue: number;
+  noShows: number;
+  cancellations: number;
+  lastVisit: string | null;
+  averageSpend: number;
+}
 
 export default function DashboardPage() {
-  const getHref = (href: string) => {
-    const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
-    return `${basePath}${href}`;
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [isAssistantSelected, setIsAssistantSelected] = useState(true);
+  const [trustedPhones, setTrustedPhones] = useState<string[]>(
+    mockTrustedClients.map((tc) => tc.phone.slice(-10))
+  );
+  const [mobileView, setMobileView] = useState<'list' | 'chat' | 'info'>('list');
+  const [localMessages, setLocalMessages] = useState<Record<string, typeof mockConversations[0]['messages']>>({});
+
+  const conversationsWithBookings = mockConversations.map((conv) => ({
+    ...conv,
+    bookings: mockBookings
+      .filter((b) => b.clientPhone === conv.clientPhone)
+      .map((b) => ({
+        id: b.id,
+        clientName: b.clientName,
+        clientPhone: b.clientPhone,
+        clientEmail: b.clientEmail,
+        serviceName: b.serviceName,
+        duration: b.duration,
+        price: b.price,
+        startTime: b.startTime,
+        endTime: b.endTime,
+        status: b.status,
+        notes: b.notes,
+        depositRequired: b.depositRequired,
+        depositAmount: b.depositAmount,
+        depositStatus: b.depositStatus,
+      })),
+  }));
+
+  const selectedConversation = conversationsWithBookings.find(
+    (c) => c.id === selectedConversationId
+  );
+
+  const handleConversationSelect = (id: string | null) => {
+    setSelectedConversationId(id);
+    setIsAssistantSelected(false);
+    setMobileView('chat');
   };
 
-  const upcomingBookings = mockBookings
-    .filter(b => b.status === 'CONFIRMED' && new Date(b.startTime) > new Date())
-    .slice(0, 5);
+  const handleAssistantSelect = () => {
+    setSelectedConversationId(null);
+    setIsAssistantSelected(true);
+    setMobileView('chat');
+  };
 
-  const recentConversations = mockConversations.slice(0, 5);
+  const handleSendMessage = useCallback(
+    (message: string) => {
+      if (!selectedConversation) return;
+
+      const newMessage = {
+        id: `msg-demo-${Date.now()}`,
+        direction: 'OUTBOUND' as const,
+        content: message,
+        createdAt: new Date().toISOString(),
+        isAi: false,
+      };
+
+      setLocalMessages((prev) => ({
+        ...prev,
+        [selectedConversation.id]: [...(prev[selectedConversation.id] || selectedConversation.messages), newMessage],
+      }));
+    },
+    [selectedConversation]
+  );
+
+  const handleToggleTrusted = useCallback(() => {
+    if (!selectedConversation) return;
+
+    const phone = selectedConversation.clientPhone.slice(-10);
+    const isTrusted = trustedPhones.includes(phone);
+
+    if (isTrusted) {
+      setTrustedPhones((prev) => prev.filter((p) => p !== phone));
+    } else {
+      setTrustedPhones((prev) => [...prev, phone]);
+    }
+  }, [selectedConversation, trustedPhones]);
+
+  const getClientStats = (phone: string): ClientStats => {
+    const clientBookings = mockBookings.filter(
+      (b) => b.clientPhone.slice(-10) === phone.slice(-10)
+    );
+    const completed = clientBookings.filter((b) => b.status === 'COMPLETED');
+    const noShows = clientBookings.filter((b) => b.status === 'NO_SHOW').length;
+    const cancellations = clientBookings.filter((b) => b.status === 'CANCELLED').length;
+    const lifetimeRevenue = completed.reduce((sum, b) => sum + b.price, 0);
+    const totalVisits = completed.length;
+    const averageSpend = totalVisits > 0 ? lifetimeRevenue / totalVisits : 0;
+    const lastVisit = completed.length > 0 ? completed[0].startTime : null;
+
+    return {
+      totalVisits,
+      lifetimeRevenue,
+      noShows,
+      cancellations,
+      lastVisit,
+      averageSpend,
+    };
+  };
+
+  const getNextBooking = (conversation: typeof conversationsWithBookings[0]): Booking | null => {
+    const now = new Date();
+    return (
+      conversation.bookings?.find(
+        (b) =>
+          (b.status === 'CONFIRMED' || b.status === 'AWAITING_DEPOSIT') &&
+          new Date(b.startTime) > now
+      ) || null
+    );
+  };
+
+  const getMessages = (conversationId: string) => {
+    const conv = conversationsWithBookings.find((c) => c.id === conversationId);
+    return localMessages[conversationId] || conv?.messages || [];
+  };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">
-          Welcome back, {mockUser.name.split(' ')[0]}!
-        </h1>
-        <p className="text-gray-600 mt-1">
-          Here is what is happening with {mockBusiness.name}
-        </p>
+    <div className="h-[calc(100vh-4rem)] flex flex-col">
+      <div className="md:hidden flex border-b border-gray-200 bg-white">
+        <button
+          onClick={() => setMobileView('list')}
+          className={cn(
+            'flex-1 py-3 text-sm font-medium',
+            mobileView === 'list'
+              ? 'text-blue-600 border-b-2 border-blue-600'
+              : 'text-gray-500'
+          )}
+        >
+          Conversations
+        </button>
+        <button
+          onClick={() => setMobileView('chat')}
+          className={cn(
+            'flex-1 py-3 text-sm font-medium',
+            mobileView === 'chat'
+              ? 'text-blue-600 border-b-2 border-blue-600'
+              : 'text-gray-500'
+          )}
+        >
+          Chat
+        </button>
+        {selectedConversation && (
+          <button
+            onClick={() => setMobileView('info')}
+            className={cn(
+              'flex-1 py-3 text-sm font-medium',
+              mobileView === 'info'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-gray-500'
+            )}
+          >
+            Client Info
+          </button>
+        )}
       </div>
 
-      <Card className="bg-blue-50 border-blue-200">
-        <CardContent className="py-4">
-          <p className="text-sm text-blue-800">
-            Your booking number:{' '}
-            <span className="font-semibold">
-              {formatPhoneNumber(mockBusiness.phoneNumber.phoneNumber)}
-            </span>
-          </p>
-          <p className="text-xs text-blue-600 mt-1">
-            Share this number with your clients so they can text to book appointments
-          </p>
-        </CardContent>
-      </Card>
+      <div className="flex-1 flex overflow-hidden">
+        <div
+          className={cn(
+            'w-full md:w-80 lg:w-96 flex-shrink-0',
+            mobileView !== 'list' && 'hidden md:block'
+          )}
+        >
+          <ConversationList
+            conversations={conversationsWithBookings.map((c) => ({
+              ...c,
+              isTrusted: trustedPhones.includes(c.clientPhone.slice(-10)),
+            }))}
+            selectedId={selectedConversationId}
+            onSelect={handleConversationSelect}
+            isAssistantSelected={isAssistantSelected}
+            onAssistantSelect={handleAssistantSelect}
+          />
+        </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="py-6">
-            <p className="text-sm text-gray-500">Upcoming Bookings</p>
-            <p className="text-3xl font-bold text-gray-900 mt-1">
-              {mockBusiness._count.bookings}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-6">
-            <p className="text-sm text-gray-500">Total Conversations</p>
-            <p className="text-3xl font-bold text-gray-900 mt-1">
-              {mockBusiness._count.conversations}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-6">
-            <p className="text-sm text-gray-500">Subscription Status</p>
-            <p className="text-lg font-semibold text-gray-900 mt-1 capitalize">
-              {mockSubscription.status.toLowerCase()}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <h2 className="text-lg font-semibold text-gray-900">
-                Upcoming Bookings
-              </h2>
-              <Link
-                href={getHref('/dashboard/bookings')}
-                className="text-sm text-blue-600 hover:underline"
-              >
-                View all
-              </Link>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {upcomingBookings.length === 0 ? (
-              <p className="text-gray-500 text-sm">No upcoming bookings</p>
-            ) : (
-              <div className="space-y-3">
-                {upcomingBookings.map((booking) => (
-                  <div
-                    key={booking.id}
-                    className="flex justify-between items-center py-2 border-b border-gray-100 last:border-0"
-                  >
-                    <div>
-                      <p className="font-medium text-gray-900">
-                        {booking.clientName}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {booking.serviceName}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium text-gray-900">
-                        {format(new Date(booking.startTime), 'MMM d')}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {format(new Date(booking.startTime), 'h:mm a')}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+        <div
+          className={cn(
+            'flex-1 min-w-0',
+            mobileView !== 'chat' && 'hidden md:block'
+          )}
+        >
+          {isAssistantSelected ? (
+            <AssistantChat clientContext={null} />
+          ) : selectedConversation ? (
+            <SmsThread
+              messages={getMessages(selectedConversation.id)}
+              clientName={selectedConversation.clientName}
+              clientPhone={selectedConversation.clientPhone}
+              onSendMessage={handleSendMessage}
+              isAiActive={selectedConversation.state !== 'OWNER_TAKEOVER'}
+              onTakeOver={() => {
+                alert('Demo: You would now take over this conversation from the AI.');
+              }}
+            />
+          ) : (
+            <div className="h-full flex items-center justify-center bg-gray-50">
+              <div className="text-center text-gray-500">
+                <p className="text-lg font-medium">Welcome back, {mockUser.name.split(' ')[0]}!</p>
+                <p className="text-sm mt-1">
+                  Select a conversation or chat with your assistant
+                </p>
               </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <h2 className="text-lg font-semibold text-gray-900">
-                Recent Conversations
-              </h2>
-              <Link
-                href={getHref('/dashboard/conversations')}
-                className="text-sm text-blue-600 hover:underline"
-              >
-                View all
-              </Link>
             </div>
-          </CardHeader>
-          <CardContent>
-            {recentConversations.length === 0 ? (
-              <p className="text-gray-500 text-sm">No conversations yet</p>
-            ) : (
-              <div className="space-y-3">
-                {recentConversations.map((convo) => (
-                  <Link
-                    key={convo.id}
-                    href={getHref(`/dashboard/conversations?id=${convo.id}`)}
-                    className="block py-2 border-b border-gray-100 last:border-0 hover:bg-gray-50 -mx-2 px-2 rounded"
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          {convo.clientName || formatPhoneNumber(convo.clientPhone)}
-                        </p>
-                        <p className="text-sm text-gray-500 truncate max-w-[200px]">
-                          {convo.messages[convo.messages.length - 1]?.content || 'No messages'}
-                        </p>
-                      </div>
-                      <p className="text-xs text-gray-400">
-                        {format(new Date(convo.lastActivity), 'MMM d')}
-                      </p>
-                    </div>
-                  </Link>
-                ))}
-              </div>
+          )}
+        </div>
+
+        {selectedConversation && (
+          <div
+            className={cn(
+              'w-80 lg:w-96 flex-shrink-0',
+              mobileView !== 'info' && 'hidden lg:block'
             )}
-          </CardContent>
-        </Card>
+          >
+            <ClientInfoPanel
+              clientPhone={selectedConversation.clientPhone}
+              clientName={selectedConversation.clientName}
+              clientEmail={selectedConversation.bookings?.[0]?.clientEmail}
+              nextBooking={getNextBooking(selectedConversation)}
+              currentBooking={selectedConversation.bookings?.[0]}
+              stats={getClientStats(selectedConversation.clientPhone)}
+              isTrusted={trustedPhones.includes(selectedConversation.clientPhone.slice(-10))}
+              onToggleTrusted={handleToggleTrusted}
+              onReschedule={(bookingId) => {
+                alert(`Demo: Reschedule booking ${bookingId}`);
+              }}
+              onCancel={(bookingId) => {
+                alert(`Demo: Cancel booking ${bookingId}`);
+              }}
+              onSendReminder={(bookingId) => {
+                alert(`Demo: Reminder sent for booking ${bookingId}`);
+              }}
+              onRequestDeposit={(bookingId) => {
+                alert(`Demo: Deposit request sent for booking ${bookingId}`);
+              }}
+              notes={selectedConversation.bookings?.[0]?.notes}
+              calendarSynced={false}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
