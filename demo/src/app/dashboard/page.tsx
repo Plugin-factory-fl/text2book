@@ -208,7 +208,7 @@ function DashboardContent() {
   };
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col">
+    <div className="h-full min-h-0 flex flex-col overflow-hidden">
       <div className="md:hidden flex border-b border-gray-200 bg-white">
         <button
           onClick={() => setMobileView('list')}
@@ -247,15 +247,15 @@ function DashboardContent() {
         )}
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 min-h-0 flex overflow-hidden">
         <div
           className={cn(
-            'flex-shrink-0 transition-all duration-300 ease-in-out overflow-hidden',
-            isLeftPanelOpen ? 'w-full md:w-80 lg:w-96' : 'w-0',
+            'flex-shrink-0 min-h-0 transition-all duration-300 ease-in-out overflow-hidden',
+            isLeftPanelOpen ? 'w-full md:w-72 xl:w-80' : 'w-0',
             mobileView !== 'list' && 'hidden md:block'
           )}
         >
-          <div className="w-full md:w-80 lg:w-96 h-full border-r border-gray-200 bg-white shadow-sm">
+          <div className="w-full md:w-72 xl:w-80 h-full border-r border-gray-200 bg-white shadow-sm">
             <ConversationList
               conversations={conversationsWithBookings.map((c) => ({
                 ...c,
@@ -272,7 +272,7 @@ function DashboardContent() {
 
         <div
           className={cn(
-            'flex-1 min-w-0 flex flex-col',
+            'flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden',
             mobileView !== 'chat' && 'hidden md:flex'
           )}
         >
@@ -298,7 +298,7 @@ function DashboardContent() {
             />
           </div>
 
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden">
             {isAssistantSelected ? (
               <AssistantChat
                 clientContext={null}
@@ -332,12 +332,12 @@ function DashboardContent() {
 
         <div
           className={cn(
-            'flex-shrink-0 transition-all duration-300 ease-in-out overflow-hidden',
-            isRightPanelOpen ? 'w-80 lg:w-96' : 'w-0',
+            'flex-shrink-0 min-h-0 transition-all duration-300 ease-in-out overflow-hidden',
+            isRightPanelOpen ? 'w-72 xl:w-80' : 'w-0',
             mobileView !== 'info' && 'hidden lg:block'
           )}
         >
-          <div className="w-80 lg:w-96 h-full border-l border-gray-200 bg-white shadow-sm rounded-l-lg">
+          <div className="w-72 xl:w-80 h-full border-l border-gray-200 bg-white shadow-sm rounded-l-lg">
             {isAssistantSelected ? (
               <BusinessOverviewPanel
                 businessName={mockBusiness.name}
@@ -387,7 +387,7 @@ function DashboardContent() {
 
 function DashboardLoading() {
   return (
-    <div className="h-[calc(100vh-4rem)] flex items-center justify-center">
+    <div className="h-full flex items-center justify-center">
       <div className="text-center text-gray-500">
         <p className="text-lg">Loading dashboard...</p>
       </div>

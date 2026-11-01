@@ -73,7 +73,7 @@ export function BusinessOverviewPanel({
   onConversationSelect,
 }: BusinessOverviewPanelProps) {
   return (
-    <div className="h-full flex flex-col bg-white overflow-y-auto">
+    <div className="h-full min-h-0 flex flex-col bg-white overflow-y-auto">
       {/* Header */}
       <div className="p-6 border-b border-gray-200">
         <h2 className="text-xl font-bold text-gray-900">Business Overview</h2>

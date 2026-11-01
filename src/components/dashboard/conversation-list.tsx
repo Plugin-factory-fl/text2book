@@ -104,19 +104,19 @@ export function ConversationList({
   ).length;
 
   return (
-    <div className="h-full flex flex-col bg-white border-r border-gray-200">
+    <div className="h-full min-h-0 flex flex-col bg-white border-r border-gray-200">
       {/* Chief Assistant Header */}
       <button
         onClick={onAssistantSelect}
         className={cn(
-          'p-6 border-b-2 border-gray-200 hover:bg-blue-50/50 transition-colors',
+          'px-3 py-3 border-b-2 border-gray-200 hover:bg-blue-50/50 transition-colors',
           isAssistantSelected && 'bg-blue-50'
         )}
       >
         <div className="flex flex-col items-center">
-          <ChiefAvatar size="lg" showBadge className="mb-3" />
-          <h2 className="font-bold text-gray-900 text-lg">Chief Assistant</h2>
-          <p className="text-sm text-gray-500">{businessName}</p>
+          <ChiefAvatar size="header" showBadge className="mb-1.5" />
+          <h2 className="font-bold text-gray-900 text-base">Chief Assistant</h2>
+          <p className="text-xs text-gray-500">{businessName}</p>
           {needsAttentionCount > 0 && (
             <div className="mt-2 inline-flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
               <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse" />
@@ -159,7 +159,7 @@ export function ConversationList({
       </div>
 
       {/* Conversations List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto">
 
         {filteredConversations.map((conv) => {
           const lastMessage = conv.messages[conv.messages.length - 1];

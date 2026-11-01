@@ -188,7 +188,7 @@ export function ClientInfoPanel({
   calendarSynced = false,
 }: ClientInfoPanelProps) {
   return (
-    <div className="h-full overflow-y-auto bg-white border-l border-gray-200">
+    <div className="h-full min-h-0 overflow-y-auto bg-white border-l border-gray-200">
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
