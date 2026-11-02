@@ -1,6 +1,7 @@
 import Stripe from 'stripe';
 import prisma from '@/lib/prisma';
 import { handleDepositPaymentSuccess, handleDepositSessionExpired } from './stripe-connect';
+import { PlanTierId, getStripePriceId, tierFromStripePriceId } from '@/config/pricing';
 
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 
@@ -12,13 +13,14 @@ const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 
 export async function createCheckoutSession(
   userId: string,
-  email: string
+  email: string,
+  tier: PlanTierId = 'STARTER'
 ): Promise<{ url: string } | { error: string }> {
   if (!stripe) {
     return { error: 'Stripe is not configured' };
   }
 
-  const priceId = process.env.STRIPE_PRICE_ID;
+  const priceId = getStripePriceId(tier);
   if (!priceId) {
     return { error: 'Stripe price ID not configured' };
   }
@@ -68,7 +70,7 @@ export async function createCheckoutSession(
     },
     success_url: `${process.env.APP_URL}/dashboard?subscription=success`,
     cancel_url: `${process.env.APP_URL}/dashboard/billing?subscription=cancelled`,
-    metadata: { userId },
+    metadata: { userId, platform: 'text2book', tier },
   });
 
   if (!session.url) {
@@ -231,6 +233,7 @@ async function updateSubscriptionFromStripe(stripeSubscription: Stripe.Subscript
     data: {
       stripeSubscriptionId: stripeSubscription.id,
       stripePriceId: stripeSubscription.items.data[0]?.price.id,
+      tier: tierFromStripePriceId(stripeSubscription.items.data[0]?.price.id),
       status,
       trialEndsAt: stripeSubscription.trial_end
         ? new Date(stripeSubscription.trial_end * 1000)

@@ -204,6 +204,36 @@ export default function BusinessInfoPage() {
         </div>
       </div>
 
+      <Card>
+        <CardHeader>
+          <h2 className="text-lg font-semibold">Import from another booking app</h2>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <select className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+            <option>Square Appointments clients</option>
+            <option>Vagaro appointments</option>
+            <option>Booksy clients</option>
+            <option>Fresha appointments</option>
+            <option>GlossGenius appointments</option>
+            <option>Acuity appointments</option>
+            <option>Calendly export</option>
+          </select>
+          <textarea
+            className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono"
+            rows={4}
+            defaultValue={'Display Name,Phone Number,Email Address\nPriya Shah,(555) 111-2222,priya@email.com'}
+          />
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => alert('Demo preview: 1 new client, 0 duplicates')}>
+              Preview
+            </Button>
+            <Button onClick={() => alert('Demo mode: would save after you confirm the preview')}>
+              Save import
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Auto-fill with AI Section */}
       <Card className="border-2 border-dashed border-blue-200 bg-blue-50/30">
         <CardContent className="py-4">

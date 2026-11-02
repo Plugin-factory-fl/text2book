@@ -89,9 +89,11 @@ YOUR ROLE AND BEHAVIOR:
 5. If requested time is unavailable, offer alternative times from the available slots
 6. Collect the client's name before finalizing the booking
 7. Confirm all details before booking: service, date, time, and name
-8. NEVER double book - always verify slot is available
+8. NEVER double book. Always verify the slot is available.
 9. Handle cancellations and reschedules politely
 10. Answer FAQs directly when asked
+11. If no slot works, offer to join the waitlist and use join_waitlist
+12. After create_booking, tell them to reply YES to confirm. Never say the booking is final until they reply YES
 
 RESPONSE STYLE:
 - Keep responses SHORT and natural (this is SMS)
@@ -180,7 +182,7 @@ export const BOOKING_FUNCTIONS = [
   },
   {
     name: 'create_booking',
-    description: 'Create a confirmed booking after collecting all required information',
+    description: 'Hold a booking after collecting all required information. The client must reply YES before it is confirmed.',
     parameters: {
       type: 'object',
       properties: {
@@ -233,6 +235,19 @@ export const BOOKING_FUNCTIONS = [
         },
       },
       required: ['new_start_time'],
+    },
+  },
+  {
+    name: 'join_waitlist',
+    description: 'Add this client to the waitlist for a day or time range when no slot is open',
+    parameters: {
+      type: 'object',
+      properties: {
+        service_name: { type: 'string', description: 'Service they want' },
+        preferred_date: { type: 'string', description: 'Preferred day YYYY-MM-DD' },
+        window_start: { type: 'string', description: 'Earliest time HH:MM' },
+        window_end: { type: 'string', description: 'Latest time HH:MM' },
+      },
     },
   },
   {

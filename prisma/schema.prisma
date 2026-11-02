@@ -91,15 +91,29 @@ model Business {
   // Platform fee (configurable, 0 for now)
   platformFeePercent      Float    @default(0)
 
-  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  services          Service[]
-  availabilityRules AvailabilityRule[]
-  faqs              FAQ[]
-  phoneNumber       PhoneNumber?
-  bookings          Booking[]
-  conversations     Conversation[]
+  // Missed call text back
+  missedCallTextBackEnabled Boolean @default(true)
+  missedCallMessage         String? @db.Text
+  ownerForwardPhone         String?
+
+  // Waitlist and YES confirmation windows
+  waitlistOfferMinutes Int @default(15)
+  yesConfirmMinutes    Int @default(60)
+
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  services           Service[]
+  availabilityRules  AvailabilityRule[]
+  faqs               FAQ[]
+  phoneNumber        PhoneNumber?
+  bookings           Booking[]
+  conversations      Conversation[]
   calendarConnection CalendarConnection?
-  trustedClients    TrustedClient[]
+  trustedClients     TrustedClient[]
+  waitlistEntries    WaitlistEntry[]
+  auditLogs          AuditLog[]
+  usagePeriods       UsagePeriod[]
+  paymentRecords     PaymentRecord[]
+  ownerNotifications OwnerNotification[]
 }
 
 model Service {
@@ -211,15 +225,35 @@ model Booking {
   depositPaidAt    DateTime?
   depositExpiresAt DateTime?     // when the hold expires if unpaid
 
-  business     Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  service      Service?        @relation(fields: [serviceId], references: [id], onDelete: SetNull)
-  conversation Conversation?   @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  // Remainder payment after the visit
+  paymentStatus     PaymentStatus  @default(UNPAID)
+  remainderAmount   Int?           // cents still owed after deposit
+  remainderPaidAt   DateTime?
+  paymentMethod     PaymentMethod?
+  paymentPromptSent Boolean        @default(false)
+
+  // YES confirmation hold
+  createdByAi            Boolean   @default(false)
+  yesConfirmRequired     Boolean   @default(false)
+  yesConfirmedAt         DateTime?
+  yesConfirmExpiresAt    DateTime?
+  yesConfirmReminderSent Boolean   @default(false)
+  reminderConfirmSent    Boolean   @default(false)
+  reminderYesAt          DateTime?
+
+  business       Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  service        Service?         @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  conversation   Conversation?    @relation(fields: [conversationId], references: [id], onDelete: SetNull)
   depositPayment DepositPayment?
+  paymentRecords PaymentRecord[]
+  auditLogs      AuditLog[]
 
   @@index([businessId])
   @@index([startTime])
   @@index([clientPhone])
   @@index([depositExpiresAt])
+  @@index([paymentStatus])
+  @@index([yesConfirmExpiresAt])
 }
 
 enum BookingStatus {
@@ -237,6 +271,51 @@ enum DepositStatus {
   PAID
   EXPIRED
   REFUNDED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PARTIAL
+  PAID
+  OUTSTANDING
+  WAIVED
+}
+
+enum PaymentMethod {
+  CARD
+  IN_PERSON
+  OTHER
+}
+
+enum PlanTier {
+  STARTER
+  GROWTH
+  PRO
+}
+
+enum WaitlistStatus {
+  WAITING
+  OFFERED
+  ACCEPTED
+  EXPIRED
+  CANCELLED
+}
+
+enum AuditAction {
+  BOOKING_CREATED
+  BOOKING_RESCHEDULED
+  BOOKING_CANCELLED
+  PAYMENT_RECORDED
+  PAYMENT_OUTSTANDING
+  WAITLIST_JOINED
+  WAITLIST_OFFERED
+  WAITLIST_ACCEPTED
+  WAITLIST_EXPIRED
+  YES_CONFIRM_SENT
+  YES_CONFIRMED
+  YES_EXPIRED
+  REMINDER_CONFIRM_SENT
+  MISSED_CALL_TEXTBACK
 }
 
 model Conversation {
@@ -302,6 +381,7 @@ model Subscription {
   stripeCustomerId     String?            @unique
   stripeSubscriptionId String?            @unique
   stripePriceId        String?
+  tier                 PlanTier           @default(STARTER)
   status               SubscriptionStatus @default(TRIAL)
   trialEndsAt          DateTime?
   currentPeriodStart   DateTime?
@@ -402,4 +482,107 @@ model OwnerDirective {
 
   @@index([conversationId])
   @@index([isActive])
+}
+
+model PaymentRecord {
+  id          String        @id @default(cuid())
+  businessId  String
+  bookingId   String?
+  clientPhone String
+  amount      Int
+  method      PaymentMethod
+  recordedAt  DateTime      @default(now())
+  notes       String?
+  createdAt   DateTime      @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  booking  Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@index([businessId])
+  @@index([bookingId])
+  @@index([clientPhone])
+}
+
+model UsagePeriod {
+  id                String   @id @default(cuid())
+  businessId        String
+  periodStart       DateTime
+  periodEnd         DateTime
+  inboundSegments   Int      @default(0)
+  outboundSegments  Int      @default(0)
+  warnSent          Boolean  @default(false)
+  capNotified       Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, periodStart])
+  @@index([businessId])
+}
+
+model WaitlistEntry {
+  id                String         @id @default(cuid())
+  businessId        String
+  clientPhone       String
+  clientName        String?
+  serviceId         String?
+  serviceName       String?
+  preferredDate     DateTime?
+  windowStart       String?
+  windowEnd         String?
+  status            WaitlistStatus @default(WAITING)
+  position          Int            @default(0)
+  offeredStartTime  DateTime?
+  offeredEndTime    DateTime?
+  offerExpiresAt    DateTime?
+  offeredBookingId  String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, status])
+  @@index([clientPhone])
+  @@index([offerExpiresAt])
+}
+
+model AuditLog {
+  id          String      @id @default(cuid())
+  businessId  String
+  clientPhone String?
+  bookingId   String?
+  action      AuditAction
+  actor       String
+  summary     String      @db.Text
+  metadata    Json?
+  createdAt   DateTime    @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  booking  Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@index([businessId])
+  @@index([clientPhone])
+  @@index([bookingId])
+  @@index([createdAt])
+}
+
+model OwnerNotification {
+  id           String    @id @default(cuid())
+  businessId   String
+  type         String
+  bookingId    String?
+  clientPhone  String?
+  title        String
+  body         String    @db.Text
+  actions      Json?
+  status       String    @default("PENDING")
+  draftFollowup String?  @db.Text
+  createdAt    DateTime  @default(now())
+  resolvedAt   DateTime?
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, status])
+  @@index([type])
 }

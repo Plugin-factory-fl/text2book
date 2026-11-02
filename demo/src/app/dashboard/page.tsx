@@ -18,6 +18,8 @@ import {
   mockInternalNotes,
   mockMetrics,
   mockEscalations,
+  mockAuditLogs,
+  mockWaitlist,
 } from '@/data/mock-data';
 import { useDemoData } from '@/contexts/demo-data-context';
 
@@ -116,6 +118,8 @@ function DashboardContent() {
         depositRequired: b.depositRequired,
         depositAmount: b.depositAmount,
         depositStatus: b.depositStatus,
+        paymentStatus: (b as { paymentStatus?: string }).paymentStatus,
+        remainderAmount: (b as { remainderAmount?: number }).remainderAmount,
       })),
     internalNotes: mockInternalNotes.filter((n) => n.conversationId === conv.id),
   }));
@@ -376,6 +380,12 @@ function DashboardContent() {
                 }}
                 notes={selectedConversation.bookings?.[0]?.notes}
                 calendarSynced={false}
+                outstandingCents={(selectedConversation.bookings || []).reduce(
+                  (sum, b) => sum + ((b as { paymentStatus?: string; remainderAmount?: number }).paymentStatus === 'OUTSTANDING' ? (b as { remainderAmount?: number }).remainderAmount || 0 : 0),
+                  0
+                )}
+                auditLogs={mockAuditLogs.filter((l) => l.clientPhone === selectedConversation.clientPhone)}
+                waitlistEntries={mockWaitlist.filter((w) => w.clientPhone === selectedConversation.clientPhone)}
               />
             ) : null}
           </div>

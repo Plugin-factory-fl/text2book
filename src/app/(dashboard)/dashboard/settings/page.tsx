@@ -25,6 +25,11 @@ interface Business {
   defaultDepositAmount: number | null;
   depositHoldMinutes: number;
   depositPolicyText: string | null;
+  missedCallTextBackEnabled: boolean;
+  missedCallMessage: string | null;
+  ownerForwardPhone: string | null;
+  waitlistOfferMinutes: number;
+  yesConfirmMinutes: number;
   stripeAccountId: string | null;
   stripeOnboardingComplete: boolean;
   phoneNumber: {
@@ -81,6 +86,11 @@ function SettingsContent() {
     defaultDepositAmount: '',
     depositHoldMinutes: 30,
     depositPolicyText: 'The deposit is non-refundable on no-show and will be applied toward your service.',
+    missedCallTextBackEnabled: true,
+    missedCallMessage: 'Hi, you just called {business}. This is the booking assistant. How can I help you today?',
+    ownerForwardPhone: '',
+    waitlistOfferMinutes: 15,
+    yesConfirmMinutes: 60,
   });
 
   useEffect(() => {
@@ -130,6 +140,11 @@ function SettingsContent() {
             depositHoldMinutes: data.business.depositHoldMinutes || 30,
             depositPolicyText: data.business.depositPolicyText || 
               'The deposit is non-refundable on no-show and will be applied toward your service.',
+            missedCallTextBackEnabled: data.business.missedCallTextBackEnabled !== false,
+            missedCallMessage: data.business.missedCallMessage || 'Hi, you just called {business}. This is the booking assistant. How can I help you today?',
+            ownerForwardPhone: data.business.ownerForwardPhone || '',
+            waitlistOfferMinutes: data.business.waitlistOfferMinutes || 15,
+            yesConfirmMinutes: data.business.yesConfirmMinutes || 60,
           });
         }
       }
@@ -625,6 +640,81 @@ function SettingsContent() {
                 </Button>
               </>
             )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h2 className="text-lg font-semibold">Missed call text back</h2>
+          <p className="text-sm text-gray-500">
+            Forward calls to your phone. If you miss one, we text the caller and start a booking chat.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="missedCallTextBackEnabled"
+                checked={formData.missedCallTextBackEnabled}
+                onChange={(e) =>
+                  setFormData({ ...formData, missedCallTextBackEnabled: e.target.checked })
+                }
+                className="w-4 h-4"
+              />
+              <label htmlFor="missedCallTextBackEnabled" className="text-sm font-medium text-gray-700">
+                Text callers when I miss a call
+              </label>
+            </div>
+            <Input
+              label="Forward calls to"
+              type="tel"
+              value={formData.ownerForwardPhone}
+              onChange={(e) =>
+                setFormData({ ...formData, ownerForwardPhone: e.target.value })
+              }
+              placeholder="Your mobile number"
+            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Missed call message
+              </label>
+              <textarea
+                value={formData.missedCallMessage}
+                onChange={(e) =>
+                  setFormData({ ...formData, missedCallMessage: e.target.value })
+                }
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900"
+                rows={3}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Use {'{business}'} for your business name. Set the Twilio voice webhook to /api/webhooks/twilio/voice.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Input
+                label="Waitlist offer window (minutes)"
+                type="number"
+                min="5"
+                value={formData.waitlistOfferMinutes}
+                onChange={(e) =>
+                  setFormData({ ...formData, waitlistOfferMinutes: parseInt(e.target.value, 10) || 15 })
+                }
+              />
+              <Input
+                label="YES hold window (minutes)"
+                type="number"
+                min="10"
+                value={formData.yesConfirmMinutes}
+                onChange={(e) =>
+                  setFormData({ ...formData, yesConfirmMinutes: parseInt(e.target.value, 10) || 60 })
+                }
+              />
+            </div>
+            <Button onClick={handleSubmit} isLoading={isSaving}>
+              Save call and waitlist settings
+            </Button>
           </div>
         </CardContent>
       </Card>

@@ -790,6 +790,103 @@ export async function importBusinessInfoTool(
   };
 }
 
+export async function recordInPersonPaymentTool(ctx: AssistantToolContext, bookingId: string): Promise<ToolResult> {
+  const { recordInPersonPayment } = await import('./payments');
+  const result = await recordInPersonPayment({ businessId: ctx.businessId, bookingId, actor: 'owner' });
+  if (!result.success) return { success: false, message: result.error || 'Could not record payment' };
+  return { success: true, message: `Recorded $${((result.amountCents || 0) / 100).toFixed(2)} paid in person.` };
+}
+
+export async function markPaymentOutstandingTool(ctx: AssistantToolContext, bookingId: string): Promise<ToolResult> {
+  const { markPaymentOutstanding } = await import('./payments');
+  const result = await markPaymentOutstanding({ businessId: ctx.businessId, bookingId, actor: 'owner' });
+  if (!result.success) return { success: false, message: result.error || 'Could not mark outstanding' };
+  return { success: true, message: 'Marked as outstanding. I drafted a reminder that is only sent if you approve.', data: { draft: result.draftFollowup } };
+}
+
+export async function listWaitlistTool(ctx: AssistantToolContext): Promise<ToolResult> {
+  const { listWaitlist } = await import('./waitlist');
+  const entries = await listWaitlist(ctx.businessId);
+  return { success: true, message: `${entries.length} people on the waitlist`, data: entries };
+}
+
+export async function addWaitlistTool(
+  ctx: AssistantToolContext,
+  params: { clientPhone: string; clientName?: string; serviceName?: string; preferredDate?: string; windowStart?: string; windowEnd?: string }
+): Promise<ToolResult> {
+  const { joinWaitlist } = await import('./waitlist');
+  const entry = await joinWaitlist({
+    businessId: ctx.businessId,
+    clientPhone: params.clientPhone,
+    clientName: params.clientName,
+    serviceName: params.serviceName,
+    preferredDate: params.preferredDate ? new Date(params.preferredDate) : undefined,
+    windowStart: params.windowStart,
+    windowEnd: params.windowEnd,
+  });
+  return { success: true, message: `Added to the waitlist at position ${entry.position}`, data: entry };
+}
+
+export async function removeWaitlistTool(ctx: AssistantToolContext, entryId: string, confirmed = false): Promise<ToolResult> {
+  if (!confirmed) {
+    return {
+      success: false,
+      message: 'Remove this waitlist entry?',
+      requiresConfirmation: true,
+      confirmationPrompt: 'Remove waitlist entry',
+    };
+  }
+  await prisma.waitlistEntry.updateMany({
+    where: { id: entryId, businessId: ctx.businessId },
+    data: { status: 'CANCELLED' },
+  });
+  return { success: true, message: 'Removed from the waitlist' };
+}
+
+export async function getUsageTool(ctx: AssistantToolContext): Promise<ToolResult> {
+  const { getBusinessTier, getOrCreateUsagePeriod } = await import('./usage');
+  const { PLAN_TIERS } = await import('@/config/pricing');
+  const tier = await getBusinessTier(ctx.businessId);
+  const period = await getOrCreateUsagePeriod(ctx.businessId);
+  const used = period.inboundSegments + period.outboundSegments;
+  const cap = PLAN_TIERS[tier].includedSegments;
+  return {
+    success: true,
+    message: `${PLAN_TIERS[tier].name} plan: ${used} of ${cap} text segments used this month`,
+    data: { tier, used, cap },
+  };
+}
+
+export async function getAuditLogTool(ctx: AssistantToolContext, clientPhone: string): Promise<ToolResult> {
+  const { listAuditForClient } = await import('./audit');
+  const logs = await listAuditForClient(ctx.businessId, clientPhone);
+  return { success: true, message: `${logs.length} audit events`, data: logs };
+}
+
+export async function importCsvTool(
+  ctx: AssistantToolContext,
+  params: { csv: string; kind: 'clients' | 'services' | 'appointments'; presetId?: string; confirmed?: boolean }
+): Promise<ToolResult> {
+  const { parseCsv, previewImport, detectPreset, IMPORT_PRESETS } = await import('./csv-import');
+  const parsed = parseCsv(params.csv || '');
+  const preset = params.presetId
+    ? IMPORT_PRESETS.find((p) => p.id === params.presetId)
+    : detectPreset(parsed.headers);
+  if (!preset) {
+    return { success: false, message: 'Could not match a CSV preset. Try Square, Vagaro, Booksy, Fresha, GlossGenius, Acuity, or Calendly headers.' };
+  }
+  const preview = previewImport({ kind: params.kind, rows: parsed.rows, mapping: preset.mapping });
+  if (!params.confirmed) {
+    return {
+      success: true,
+      requiresConfirmation: true,
+      confirmationPrompt: `Preview: ${preview.kept} new rows, ${preview.duplicates} duplicates with ${preset.name}. Confirm to save.`,
+      data: { kept: preview.kept, duplicates: preview.duplicates, sample: preview.rows.slice(0, 5) },
+    };
+  }
+  return { success: true, message: 'Open Business Info to finish the CSV import with preview and save.' };
+}
+
 // === TOOL DEFINITIONS FOR OPENAI ===
 
 export const ASSISTANT_TOOL_DEFINITIONS = [
@@ -1139,6 +1236,115 @@ export const ASSISTANT_TOOL_DEFINITIONS = [
   {
     type: 'function',
     function: {
+      name: 'record_in_person_payment',
+      description: 'Record that a client paid the remainder in person',
+      parameters: {
+        type: 'object',
+        properties: {
+          bookingId: { type: 'string' },
+        },
+        required: ['bookingId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'mark_payment_outstanding',
+      description: 'Mark a booking remainder as unpaid and draft a reminder',
+      parameters: {
+        type: 'object',
+        properties: {
+          bookingId: { type: 'string' },
+        },
+        required: ['bookingId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_waitlist',
+      description: 'List active waitlist entries',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'add_waitlist_entry',
+      description: 'Add a client to the waitlist',
+      parameters: {
+        type: 'object',
+        properties: {
+          clientPhone: { type: 'string' },
+          clientName: { type: 'string' },
+          serviceName: { type: 'string' },
+          preferredDate: { type: 'string' },
+          windowStart: { type: 'string' },
+          windowEnd: { type: 'string' },
+        },
+        required: ['clientPhone'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'remove_waitlist_entry',
+      description: 'Remove a waitlist entry',
+      parameters: {
+        type: 'object',
+        properties: {
+          entryId: { type: 'string' },
+          confirmed: { type: 'boolean' },
+        },
+        required: ['entryId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_usage',
+      description: 'Get this month text usage versus the plan allowance',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_audit_log',
+      description: 'Get AI action history for a client',
+      parameters: {
+        type: 'object',
+        properties: {
+          clientPhone: { type: 'string' },
+        },
+        required: ['clientPhone'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'import_csv',
+      description: 'Preview or apply a CSV import of clients, services, or appointments. Requires confirmation before saving.',
+      parameters: {
+        type: 'object',
+        properties: {
+          csv: { type: 'string', description: 'Raw CSV text' },
+          kind: { type: 'string', enum: ['clients', 'services', 'appointments'] },
+          presetId: { type: 'string' },
+          confirmed: { type: 'boolean' },
+        },
+        required: ['csv', 'kind'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'import_business_info',
       description: 'Import business details from a website URL. Requires confirmation before saving anything.',
       parameters: {
@@ -1211,6 +1417,22 @@ export async function executeAssistantTool(
       return updateClientName(ctx, args as any);
     case 'import_business_info':
       return importBusinessInfoTool(ctx, args.url as string, args.confirmed as boolean);
+    case 'record_in_person_payment':
+      return recordInPersonPaymentTool(ctx, args.bookingId as string);
+    case 'mark_payment_outstanding':
+      return markPaymentOutstandingTool(ctx, args.bookingId as string);
+    case 'list_waitlist':
+      return listWaitlistTool(ctx);
+    case 'add_waitlist_entry':
+      return addWaitlistTool(ctx, args as any);
+    case 'remove_waitlist_entry':
+      return removeWaitlistTool(ctx, args.entryId as string, args.confirmed as boolean);
+    case 'get_usage':
+      return getUsageTool(ctx);
+    case 'get_audit_log':
+      return getAuditLogTool(ctx, args.clientPhone as string);
+    case 'import_csv':
+      return importCsvTool(ctx, args as any);
     default:
       return { success: false, message: `Unknown tool: ${toolName}` };
   }

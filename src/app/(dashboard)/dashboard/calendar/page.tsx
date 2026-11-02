@@ -36,9 +36,22 @@ export default function CalendarPage() {
   const [viewType, setViewType] = useState<ViewType>('calendar');
   const [filter, setFilter] = useState<FilterType>('upcoming');
   const [selectedBooking, setSelectedBooking] = useState<CalendarBooking | null>(null);
+  const [waitlist, setWaitlist] = useState<Array<{
+    id: string;
+    clientName: string | null;
+    clientPhone: string;
+    serviceName: string | null;
+    status: string;
+    windowStart: string | null;
+    windowEnd: string | null;
+  }>>([]);
 
   useEffect(() => {
     fetchBookings();
+    fetch('/api/waitlist')
+      .then((r) => (r.ok ? r.json() : { entries: [] }))
+      .then((data) => setWaitlist(data.entries || []))
+      .catch(() => undefined);
   }, [filter]);
 
   const fetchBookings = async () => {
@@ -276,6 +289,28 @@ export default function CalendarPage() {
             </div>
           )}
         </>
+      )}
+
+      {waitlist.length > 0 && (
+        <Card>
+          <CardContent className="py-4">
+            <h2 className="text-lg font-semibold text-gray-900 mb-3">Waitlist</h2>
+            <div className="space-y-2">
+              {waitlist.map((entry) => (
+                <div key={entry.id} className="flex items-center justify-between text-sm">
+                  <div>
+                    <p className="font-medium text-gray-900">{entry.clientName || formatPhoneNumber(entry.clientPhone)}</p>
+                    <p className="text-gray-500">
+                      {entry.serviceName || 'Any service'}
+                      {entry.windowStart ? ` · ${entry.windowStart} to ${entry.windowEnd}` : ''}
+                    </p>
+                  </div>
+                  <span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-800">{entry.status}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       <BookingDetailModal

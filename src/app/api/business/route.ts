@@ -20,6 +20,11 @@ const businessSchema = z.object({
   defaultDepositAmount: z.number().min(0).max(100000).optional().nullable(),
   depositHoldMinutes: z.number().min(5).max(1440).optional(),
   depositPolicyText: z.string().max(500).optional(),
+  missedCallTextBackEnabled: z.boolean().optional(),
+  missedCallMessage: z.string().max(500).optional().nullable(),
+  ownerForwardPhone: z.string().max(20).optional().nullable(),
+  waitlistOfferMinutes: z.number().min(5).max(240).optional(),
+  yesConfirmMinutes: z.number().min(10).max(1440).optional(),
 });
 
 export async function GET() {

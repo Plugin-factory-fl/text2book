@@ -21,7 +21,7 @@ export const mockBusiness = {
   stripeOnboardingComplete: true,
   phoneNumber: {
     phoneNumber: '+15551234567',
-    monthlySmsSent: 127,
+    monthlySmsSent: 410,
     monthlySmsCap: 500,
   },
   _count: {
@@ -351,6 +351,8 @@ export const mockBookings = [
     depositRequired: false,
     depositAmount: null,
     depositStatus: 'NOT_REQUIRED',
+    paymentStatus: 'UNPAID',
+    remainderAmount: 3500,
   },
   {
     id: 'booking-13',
@@ -369,6 +371,8 @@ export const mockBookings = [
     depositRequired: true,
     depositAmount: 2000,
     depositStatus: 'PAID',
+    paymentStatus: 'OUTSTANDING',
+    remainderAmount: 4500,
   },
   {
     id: 'booking-14',
@@ -579,13 +583,109 @@ export const mockConversations = [
     ],
     bookings: [mockBookings[4]],
   },
+  {
+    id: 'conv-6',
+    clientPhone: '+15557654320',
+    clientName: 'Nina Patel',
+    state: 'BOOKING_COMPLETE',
+    lastActivity: new Date(Date.now() - 86400000 * 2).toISOString(),
+    messages: [
+      {
+        id: 'msg-60',
+        direction: 'INBOUND' as const,
+        content: 'Thanks again for yesterday',
+        createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+      },
+    ],
+    bookings: [{ ...mockBookings[12], paymentStatus: 'OUTSTANDING', remainderAmount: 4500 }],
+  },
 ];
 
 export const mockSubscription = {
   status: 'ACTIVE',
+  tier: 'STARTER',
   currentPeriodStart: new Date(Date.now() - 86400000 * 15).toISOString(),
   currentPeriodEnd: new Date(Date.now() + 86400000 * 15).toISOString(),
   trialEnd: null,
+};
+
+export const mockWaitlist = [
+  {
+    id: 'wl-1',
+    clientName: 'Priya Shah',
+    clientPhone: '+15551112222',
+    serviceName: 'Color Treatment',
+    status: 'WAITING',
+    preferredDate: createDate(1, 0, 0).toISOString(),
+    windowStart: '10:00',
+    windowEnd: '14:00',
+  },
+  {
+    id: 'wl-2',
+    clientName: 'Omar Hassan',
+    clientPhone: '+15553334444',
+    serviceName: "Men's Haircut",
+    status: 'OFFERED',
+    preferredDate: createDate(0, 0, 0).toISOString(),
+    windowStart: '15:00',
+    windowEnd: '17:00',
+  },
+];
+
+export const mockAuditLogs = [
+  {
+    id: 'aud-1',
+    clientPhone: '+15559876543',
+    action: 'BOOKING_CREATED',
+    summary: 'Held Women\'s Haircut pending YES from Emily Chen',
+    createdAt: new Date(Date.now() - 7000000).toISOString(),
+  },
+  {
+    id: 'aud-2',
+    clientPhone: '+15559876543',
+    action: 'YES_CONFIRMED',
+    summary: 'Confirmed Women\'s Haircut on today',
+    createdAt: new Date(Date.now() - 6800000).toISOString(),
+  },
+  {
+    id: 'aud-3',
+    clientPhone: '+15557654320',
+    action: 'PAYMENT_OUTSTANDING',
+    summary: 'Marked $45.00 outstanding for Women\'s Haircut',
+    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+  },
+  {
+    id: 'aud-4',
+    clientPhone: '+15551112222',
+    action: 'WAITLIST_JOINED',
+    summary: 'Joined the waitlist for Color Treatment',
+    createdAt: new Date(Date.now() - 3600000).toISOString(),
+  },
+];
+
+export const mockPaymentPrompt = {
+  id: 'note-pay-1',
+  body: 'The appointment has passed but no payment has yet been recorded. Did they pay the remainder of the service in person?',
+  clientName: 'Kevin Lee',
+  bookingId: 'booking-12',
+  amount: 35,
+};
+
+export const mockPendingYes = {
+  id: 'booking-15',
+  clientName: 'Ava Brooks',
+  clientPhone: '+15550001111',
+  serviceName: 'Blowout',
+  startTime: createDate(2, 13, 0).toISOString(),
+  status: 'PENDING',
+};
+
+export const mockUsage = {
+  tier: 'STARTER',
+  used: 410,
+  cap: 500,
+  inboundSegments: 198,
+  outboundSegments: 212,
 };
 
 export const mockInternalNotes = [

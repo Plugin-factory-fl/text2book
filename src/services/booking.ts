@@ -18,6 +18,8 @@ export interface CreateBookingParams {
   clientEmail?: string;
   startTime: Date;
   notes?: string;
+  createdByAi?: boolean;
+  requireYesConfirm?: boolean;
 }
 
 export interface BookingResult {
@@ -44,6 +46,8 @@ export async function createBooking(params: CreateBookingParams): Promise<Bookin
     clientEmail,
     startTime,
     notes,
+    createdByAi = false,
+    requireYesConfirm,
   } = params;
 
   const service = await prisma.service.findUnique({
@@ -128,9 +132,15 @@ export async function createBooking(params: CreateBookingParams): Promise<Bookin
   const depositAmount = trusted ? null : await getDepositAmountForService(businessId, serviceId);
   const requiresDeposit = depositAmount !== null && depositAmount > 0;
 
+  const holdForYes = requireYesConfirm ?? createdByAi;
+  const remainderAmount = Math.max(
+    0,
+    Math.round((service.price || 0) * 100) - (requiresDeposit && depositAmount ? depositAmount : 0)
+  );
+
   let calendarEventId: string | null = null;
   
-  if (!requiresDeposit) {
+  if (!requiresDeposit && !holdForYes) {
     try {
       calendarEventId = await createCalendarEvent({
         businessId,
@@ -149,6 +159,16 @@ export async function createBooking(params: CreateBookingParams): Promise<Bookin
   const depositExpiresAt = requiresDeposit 
     ? new Date(Date.now() + depositHoldMinutes * 60 * 1000) 
     : null;
+  const yesMinutes = business.yesConfirmMinutes || 60;
+  const yesConfirmExpiresAt = holdForYes
+    ? new Date(Date.now() + yesMinutes * 60 * 1000)
+    : null;
+
+  const initialStatus = holdForYes
+    ? 'PENDING'
+    : requiresDeposit
+      ? 'AWAITING_DEPOSIT'
+      : 'CONFIRMED';
 
   const booking = await prisma.booking.create({
     data: {
@@ -164,11 +184,16 @@ export async function createBooking(params: CreateBookingParams): Promise<Bookin
       startTime,
       endTime,
       calendarEventId,
-      status: requiresDeposit ? 'AWAITING_DEPOSIT' : 'CONFIRMED',
+      status: initialStatus,
       depositRequired: requiresDeposit,
       depositAmount: depositAmount,
       depositStatus: requiresDeposit ? 'PENDING' : 'NOT_REQUIRED',
       depositExpiresAt,
+      paymentStatus: 'UNPAID',
+      remainderAmount,
+      createdByAi,
+      yesConfirmRequired: holdForYes,
+      yesConfirmExpiresAt,
     },
   });
 
@@ -198,6 +223,32 @@ export async function createBooking(params: CreateBookingParams): Promise<Bookin
       depositRequired: true,
       depositAmount,
       depositUrl: checkoutResult.url,
+    };
+  }
+
+  const { logAudit } = await import('./audit');
+  await logAudit({
+    businessId,
+    action: 'BOOKING_CREATED',
+    actor: createdByAi ? 'ai' : 'owner',
+    summary: holdForYes
+      ? `Held ${service.name} pending YES from ${clientName}`
+      : `Booked ${service.name} for ${clientName}`,
+    clientPhone,
+    bookingId: booking.id,
+  });
+
+  if (holdForYes) {
+    const { requestYesConfirmation } = await import('./confirmation');
+    await requestYesConfirmation({ bookingId: booking.id, reason: 'create' });
+    return {
+      success: true,
+      booking: {
+        id: booking.id,
+        serviceName: service.name,
+        startTime,
+        endTime,
+      },
     };
   }
 
@@ -280,6 +331,31 @@ export async function cancelBooking(
   await prisma.scheduledReminder.deleteMany({
     where: { bookingId, sent: false },
   });
+
+  const { logAudit } = await import('./audit');
+  await logAudit({
+    businessId: booking.businessId,
+    action: 'BOOKING_CANCELLED',
+    actor: 'system',
+    summary: `Cancelled ${booking.serviceName} for ${booking.clientName}`,
+    clientPhone: booking.clientPhone,
+    bookingId: booking.id,
+    metadata: reason ? { reason } : undefined,
+  });
+
+  try {
+    const { offerCancelledSlotToWaitlist } = await import('./waitlist');
+    await offerCancelledSlotToWaitlist({
+      businessId: booking.businessId,
+      cancelledBookingId: booking.id,
+      startTime: booking.startTime,
+      endTime: booking.endTime,
+      serviceId: booking.serviceId,
+      serviceName: booking.serviceName,
+    });
+  } catch (error) {
+    console.error('Failed to offer cancelled slot to waitlist:', error);
+  }
 
   if (booking.business.phoneNumber) {
     try {
@@ -421,7 +497,7 @@ export async function findUpcomingBookingByClientPhone(
     where: {
       businessId,
       clientPhone,
-      status: 'CONFIRMED',
+      status: { in: ['CONFIRMED', 'PENDING', 'AWAITING_DEPOSIT'] },
       startTime: { gte: new Date() },
     },
     orderBy: { startTime: 'asc' },

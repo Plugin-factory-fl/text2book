@@ -17,6 +17,8 @@ interface Booking {
   depositRequired?: boolean;
   depositAmount?: number | null;
   depositStatus?: string;
+  paymentStatus?: string;
+  remainderAmount?: number | null;
 }
 
 interface ClientStats {
@@ -43,6 +45,9 @@ interface ClientInfoPanelProps {
   onRequestDeposit?: (bookingId: string) => void;
   notes?: string | null;
   calendarSynced?: boolean;
+  outstandingCents?: number;
+  auditLogs?: Array<{ id: string; summary: string; createdAt: string }>;
+  waitlistEntries?: Array<{ id: string; serviceName?: string | null; status: string }>;
 }
 
 function formatPhoneNumber(phone: string): string {
@@ -186,6 +191,9 @@ export function ClientInfoPanel({
   onRequestDeposit,
   notes,
   calendarSynced = false,
+  outstandingCents = 0,
+  auditLogs = [],
+  waitlistEntries = [],
 }: ClientInfoPanelProps) {
   return (
     <div className="h-full min-h-0 overflow-y-auto bg-white border-l border-gray-200">
@@ -222,6 +230,11 @@ export function ClientInfoPanel({
           {calendarSynced && (
             <span className="text-xs text-gray-500 flex items-center gap-1">
               📅 Calendar synced
+            </span>
+          )}
+          {outstandingCents > 0 && (
+            <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700">
+              Outstanding ${(outstandingCents / 100).toFixed(2)}
             </span>
           )}
         </div>
@@ -296,6 +309,43 @@ export function ClientInfoPanel({
           <div className="border-t border-gray-200 pt-4">
             <h3 className="text-sm font-medium text-gray-900 mb-2">Notes</h3>
             <p className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3">{notes}</p>
+          </div>
+        )}
+
+        {(currentBooking || nextBooking) && (
+          <div className="border-t border-gray-200 pt-4">
+            <button
+              type="button"
+              onClick={() => alert('Demo mode: recorded as paid in person')}
+              className="text-xs px-3 py-1.5 bg-green-100 text-green-700 rounded-full"
+            >
+              Mark paid in person
+            </button>
+          </div>
+        )}
+
+        {waitlistEntries.length > 0 && (
+          <div className="border-t border-gray-200 pt-4">
+            <h3 className="text-sm font-medium text-gray-900 mb-2">Waitlist</h3>
+            {waitlistEntries.map((entry) => (
+              <p key={entry.id} className="text-sm text-amber-800 bg-amber-50 rounded-lg p-2">
+                {entry.serviceName || 'Any service'} · {entry.status}
+              </p>
+            ))}
+          </div>
+        )}
+
+        {auditLogs.length > 0 && (
+          <div className="border-t border-gray-200 pt-4">
+            <h3 className="text-sm font-medium text-gray-900 mb-2">AI action log</h3>
+            <div className="space-y-2">
+              {auditLogs.map((log) => (
+                <div key={log.id} className="bg-gray-50 rounded-lg p-2">
+                  <p className="text-xs text-gray-500">{format(new Date(log.createdAt), 'MMM d, h:mm a')}</p>
+                  <p className="text-sm text-gray-800">{log.summary}</p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

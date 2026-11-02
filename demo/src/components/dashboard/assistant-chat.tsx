@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-import { mockBookings, mockBusiness } from '@/data/mock-data';
+import { mockBookings, mockBusiness, mockPaymentPrompt, mockUsage, mockWaitlist } from '@/data/mock-data';
 import { ChiefAvatar } from './chief-avatar';
 
 interface Message {
@@ -12,6 +12,7 @@ interface Message {
   content: string;
   timestamp: Date;
   pending?: boolean;
+  actions?: Array<{ id: string; label: string; kind?: string }>;
 }
 
 interface ClientContext {
@@ -38,9 +39,9 @@ interface AssistantChatProps {
 
 const SUGGESTED_PROMPTS = [
   "What's my revenue this month?",
-  "Who's booked for tomorrow?",
-  "Show unpaid deposits",
-  "Import my info from mysite.com",
+  "Show the waitlist",
+  "How is my text usage?",
+  "Import a Square CSV",
 ];
 
 const CLIENT_CONTEXT_PROMPTS = [
@@ -116,6 +117,26 @@ function getMockResponse(
         action: () => onServiceUpdate(service.id, { duration: newDuration }),
       };
     }
+  }
+
+  if (lowerQuery.includes('waitlist')) {
+    return {
+      response: `Waitlist:\n\n${mockWaitlist
+        .map((w) => `• ${w.clientName} for ${w.serviceName} (${w.status})`)
+        .join('\n')}\n\nFirst YES on an offer locks the slot.`,
+    };
+  }
+
+  if (lowerQuery.includes('usage') || lowerQuery.includes('tier') || lowerQuery.includes('plan')) {
+    return {
+      response: `Starter plan: ${mockUsage.used} of ${mockUsage.cap} text segments used this month (${Math.round((mockUsage.used / mockUsage.cap) * 100)}%). Growth is $29.99 with 850 segments. In progress bookings are never cut off.`,
+    };
+  }
+
+  if (lowerQuery.includes('csv') || (lowerQuery.includes('import') && lowerQuery.includes('square'))) {
+    return {
+      response: `I can import clients, services, and upcoming appointments from Square, Vagaro, Booksy, Fresha, GlossGenius, Acuity, or Calendly. Open Business Info, pick a preset, preview, then save. Duplicates are skipped.`,
+    };
   }
 
   if (lowerQuery.includes('import') && (lowerQuery.includes('http') || lowerQuery.includes('.com') || lowerQuery.includes('site'))) {
@@ -214,8 +235,25 @@ export function AssistantChat({ clientContext, onActionComplete, onServiceUpdate
     {
       id: 'welcome',
       role: 'assistant',
-      content: `Hi! I'm your assistant. I can help you manage bookings, check revenue, send messages to clients, update settings, and more. What would you like to do?`,
+      content: `Hi! I'm your assistant. I can help you manage bookings, payments, the waitlist, imports, and billing. What would you like to do?`,
       timestamp: new Date(),
+    },
+    {
+      id: 'pay-prompt',
+      role: 'assistant',
+      content: `${mockPaymentPrompt.body}\n\nKevin Lee, Men's Haircut, $${mockPaymentPrompt.amount} remainder.`,
+      timestamp: new Date(),
+      actions: [
+        { id: 'yes', label: 'Yes', kind: 'yes' },
+        { id: 'no', label: 'No', kind: 'no' },
+      ],
+    },
+    {
+      id: 'usage-prompt',
+      role: 'assistant',
+      content: `You have used ${Math.round((mockUsage.used / mockUsage.cap) * 100)}% of this month's Starter texts (${mockUsage.used} of ${mockUsage.cap} segments). One click upgrade to Growth keeps conversations flowing.`,
+      timestamp: new Date(),
+      actions: [{ id: 'upgrade', label: 'Upgrade to Growth', kind: 'upgrade' }],
     },
   ]);
   const [input, setInput] = useState('');
@@ -335,7 +373,44 @@ export function AssistantChat({ clientContext, onActionComplete, onServiceUpdate
                   />
                 </div>
               ) : (
-                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                <>
+                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                  {message.actions && message.actions.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {message.actions.map((action) => (
+                        <button
+                          key={action.id}
+                          type="button"
+                          onClick={() => {
+                            const followUp =
+                              action.id === 'yes'
+                                ? 'Recorded $35.00 paid in person for Kevin Lee. Lifetime revenue is updated.'
+                                : action.id === 'no'
+                                  ? 'Marked outstanding. I drafted a reminder. It is only sent if you approve.'
+                                  : 'Demo mode: would start Growth checkout at $29.99.';
+                            setMessages((prev) =>
+                              prev
+                                .map((m) => (m.id === message.id ? { ...m, actions: undefined } : m))
+                                .concat({
+                                  id: `act-${Date.now()}`,
+                                  role: 'assistant',
+                                  content: followUp,
+                                  timestamp: new Date(),
+                                })
+                            );
+                          }}
+                          className={
+                            action.kind === 'no'
+                              ? 'px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-700 hover:bg-gray-50'
+                              : 'px-3 py-1 text-xs rounded-full bg-blue-600 text-white hover:bg-blue-700'
+                          }
+                        >
+                          {action.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>

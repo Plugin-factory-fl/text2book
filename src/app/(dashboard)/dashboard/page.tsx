@@ -44,6 +44,8 @@ async function DashboardContent() {
           OR: [
             { status: 'CONFIRMED' },
             { status: 'AWAITING_DEPOSIT' },
+            { status: 'PENDING' },
+            { status: 'COMPLETED' },
           ],
         },
         orderBy: { startTime: 'asc' },
@@ -86,6 +88,8 @@ async function DashboardContent() {
       depositRequired: b.depositRequired,
       depositAmount: b.depositAmount,
       depositStatus: b.depositStatus,
+      paymentStatus: b.paymentStatus,
+      remainderAmount: b.remainderAmount,
     })),
     internalNotes: conv.internalNotes.map((n) => ({
       id: n.id,

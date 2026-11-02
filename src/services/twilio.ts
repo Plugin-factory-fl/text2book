@@ -74,10 +74,13 @@ export async function purchasePhoneNumber(phoneNumber: string, webhookUrl: strin
   }
 
   try {
+    const voiceUrl = webhookUrl.replace(/\/api\/webhooks\/twilio$/, '/api/webhooks/twilio/voice');
     const purchased = await twilioClient.incomingPhoneNumbers.create({
       phoneNumber,
       smsUrl: webhookUrl,
       smsMethod: 'POST',
+      voiceUrl,
+      voiceMethod: 'POST',
     });
 
     return {

@@ -34,6 +34,8 @@ interface Booking {
   depositRequired?: boolean;
   depositAmount?: number | null;
   depositStatus?: string;
+  paymentStatus?: string;
+  remainderAmount?: number | null;
 }
 
 interface InternalNote {
@@ -114,6 +116,8 @@ export function DashboardClient({
   const [mobileView, setMobileView] = useState<'list' | 'chat' | 'info'>('list');
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
+  const [auditLogs, setAuditLogs] = useState<Array<{ id: string; action: string; summary: string; createdAt: string }>>([]);
+  const [waitlistEntries, setWaitlistEntries] = useState<Array<{ id: string; serviceName?: string | null; status: string; preferredDate?: string | null; clientPhone?: string }>>([]);
 
   useEffect(() => {
     const stored = localStorage.getItem(PANEL_STORAGE_KEY);
@@ -134,6 +138,23 @@ export function DashboardClient({
       left: isLeftPanelOpen,
     }));
   }, [isRightPanelOpen, isLeftPanelOpen]);
+
+  useEffect(() => {
+    fetch('/api/waitlist')
+      .then((r) => (r.ok ? r.json() : { entries: [] }))
+      .then((data) => setWaitlistEntries(data.entries || []))
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedConversationId) return;
+    const convo = conversations.find((c) => c.id === selectedConversationId);
+    if (!convo) return;
+    fetch(`/api/audit?phone=${encodeURIComponent(convo.clientPhone)}`)
+      .then((r) => (r.ok ? r.json() : { logs: [] }))
+      .then((data) => setAuditLogs(data.logs || []))
+      .catch(() => undefined);
+  }, [selectedConversationId, conversations]);
 
   useEffect(() => {
     const conversationParam = searchParams.get('conversation');
@@ -444,8 +465,30 @@ export function DashboardClient({
                       await fetch(`/api/bookings/${bookingId}/deposit-reminder`, { method: 'POST' });
                       alert('Deposit reminder sent!');
                     }}
+                    onMarkPaid={async (bookingId) => {
+                      await fetch('/api/payments', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ bookingId, decision: 'yes' }),
+                      });
+                      window.location.reload();
+                    }}
+                    onMarkOutstanding={async (bookingId) => {
+                      await fetch('/api/payments', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ bookingId, decision: 'no' }),
+                      });
+                      window.location.reload();
+                    }}
                     notes={selectedConversation.bookings?.[0]?.notes}
                     calendarSynced={false}
+                    outstandingCents={(selectedConversation.bookings || []).reduce(
+                      (sum, b) => sum + (b.paymentStatus === 'OUTSTANDING' ? b.remainderAmount || 0 : 0),
+                      0
+                    )}
+                    auditLogs={auditLogs}
+                    waitlistEntries={waitlistEntries.filter((w) => w.clientPhone === selectedConversation.clientPhone)}
                   />
                 </div>
               </div>

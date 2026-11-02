@@ -135,6 +135,32 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader>
+          <h2 className="text-lg font-semibold">Missed call text back</h2>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" defaultChecked className="w-4 h-4" />
+              Text callers when I miss a call
+            </label>
+            <Input label="Forward calls to" defaultValue="(555) 987-6543" />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Missed call message</label>
+              <textarea
+                defaultValue="Hi, you just called Jane's Hair Studio. This is the booking assistant. How can I help you today?"
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                rows={3}
+              />
+            </div>
+            <p className="text-xs text-gray-500">
+              Point the Twilio voice webhook to /api/webhooks/twilio/voice. On no answer or busy we text the caller and start a chat.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <h2 className="text-lg font-semibold">Reminder Settings</h2>
         </CardHeader>
         <CardContent>

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateTwilioSignature, sendSms } from '@/services/twilio';
+import { validateTwilioSignature } from '@/services/twilio';
 import { processIncomingMessage } from '@/services/ai-conversation';
-import { notifyOwnerSmsCap } from '@/services/notifications';
+import { evaluateInboundPolicy, notifyUsageThreshold, recordSmsUsage } from '@/services/usage';
+import { claimWaitlistOffer, findActiveWaitlistOffer } from '@/services/waitlist';
+import { confirmBookingByYes, findPendingYes, isAffirmativeReply } from '@/services/confirmation';
 import prisma from '@/lib/prisma';
 
 export async function POST(request: NextRequest) {
@@ -23,7 +25,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const { From: from, To: to, Body: body, MessageSid: messageSid } = params;
+    const { From: from, To: to, Body: body } = params;
 
     if (!from || !to || !body) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -31,15 +33,7 @@ export async function POST(request: NextRequest) {
 
     const phoneNumber = await prisma.phoneNumber.findUnique({
       where: { phoneNumber: to },
-      include: {
-        business: {
-          include: { 
-            services: { where: { isActive: true } },
-            availabilityRules: { where: { isActive: true } },
-            faqs: true,
-          },
-        },
-      },
+      include: { business: true },
     });
 
     if (!phoneNumber || !phoneNumber.business) {
@@ -51,86 +45,81 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Business is not active' }, { status: 403 });
     }
 
-    const now = new Date();
-    const lastReset = phoneNumber.lastMonthlyReset;
-    const monthsSinceReset =
-      (now.getFullYear() - lastReset.getFullYear()) * 12 +
-      (now.getMonth() - lastReset.getMonth());
-
-    if (monthsSinceReset >= 1) {
-      await prisma.phoneNumber.update({
-        where: { id: phoneNumber.id },
-        data: {
-          monthlySmsSent: 0,
-          lastMonthlyReset: now,
+    const conversation = await prisma.conversation.findUnique({
+      where: {
+        businessId_clientPhone: {
+          businessId: phoneNumber.businessId,
+          clientPhone: from,
         },
-      });
-    }
-
-    const smsCapReached = phoneNumber.monthlySmsSent >= phoneNumber.monthlySmsCap;
-    const smsCapWarning = phoneNumber.monthlySmsSent >= phoneNumber.monthlySmsCap * 0.8;
-    
-    if (smsCapReached) {
-      console.warn(`SMS cap reached for business: ${phoneNumber.businessId}`);
-      
-      await notifyOwnerSmsCap(
-        phoneNumber.businessId,
-        'reached',
-        phoneNumber.monthlySmsSent,
-        phoneNumber.monthlySmsCap
-      );
-      
-      const conversation = await getOrCreateConversation(phoneNumber.businessId, from);
-      await prisma.message.create({
-        data: {
-          conversationId: conversation.id,
-          direction: 'INBOUND',
-          content: body,
-        },
-      });
-      
-      await prisma.conversation.update({
-        where: { id: conversation.id },
-        data: { lastActivity: new Date() },
-      });
-
-      return new NextResponse(
-        `<?xml version="1.0" encoding="UTF-8"?>
-        <Response>
-          <Message>We have reached our messaging limit for this month. Please contact ${phoneNumber.business.name} directly${phoneNumber.business.phone ? ` at ${phoneNumber.business.phone}` : ''} to book your appointment. We apologize for the inconvenience!</Message>
-        </Response>`,
-        {
-          headers: { 'Content-Type': 'text/xml' },
-        }
-      );
-    }
-
-    if (smsCapWarning && phoneNumber.monthlySmsSent === Math.floor(phoneNumber.monthlySmsCap * 0.8)) {
-      await notifyOwnerSmsCap(
-        phoneNumber.businessId,
-        'warning',
-        phoneNumber.monthlySmsSent,
-        phoneNumber.monthlySmsCap
-      );
-    }
-
-    const result = await processIncomingMessage(
-      phoneNumber.businessId,
-      from,
-      body
-    );
-
-    await prisma.phoneNumber.update({
-      where: { id: phoneNumber.id },
-      data: {
-        monthlySmsSent: { increment: 2 },
       },
     });
+
+    const policy = await evaluateInboundPolicy({
+      businessId: phoneNumber.businessId,
+      clientPhone: from,
+      conversationState: conversation?.state,
+    });
+
+    let reply: string | null = null;
+
+    if (isAffirmativeReply(body)) {
+      const offer = await findActiveWaitlistOffer(phoneNumber.businessId, from);
+      if (offer) {
+        const claimed = await claimWaitlistOffer({
+          businessId: phoneNumber.businessId,
+          clientPhone: from,
+        });
+        reply = claimed.message;
+      } else {
+        const pendingYes = await findPendingYes(phoneNumber.businessId, from);
+        if (pendingYes) {
+          const confirmed = await confirmBookingByYes({
+            businessId: phoneNumber.businessId,
+            clientPhone: from,
+          });
+          reply = confirmed.message;
+        }
+      }
+    }
+
+    if (!reply) {
+      if (policy.atCap && !policy.allow) {
+        reply = `Thanks for texting ${phoneNumber.business.name}. We are at this month's messaging allowance and the owner is upgrading. We will text you as soon as we are back.`;
+      } else {
+        const result = await processIncomingMessage(phoneNumber.businessId, from, body);
+        reply = result.response;
+      }
+    }
+
+    const usage = await recordSmsUsage({
+      businessId: phoneNumber.businessId,
+      inboundBody: body,
+      outboundBody: reply,
+    });
+
+    if (usage.justHitWarn) {
+      await notifyUsageThreshold({
+        businessId: phoneNumber.businessId,
+        used: usage.used,
+        cap: usage.cap,
+        tier: usage.tier,
+        kind: 'warning',
+      });
+    }
+    if (usage.justHitCap) {
+      await notifyUsageThreshold({
+        businessId: phoneNumber.businessId,
+        used: usage.used,
+        cap: usage.cap,
+        tier: usage.tier,
+        kind: 'reached',
+      });
+    }
 
     return new NextResponse(
       `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
-        <Message>${escapeXml(result.response)}</Message>
+        <Message>${escapeXml(reply)}</Message>
       </Response>`,
       {
         headers: { 'Content-Type': 'text/xml' },
@@ -157,28 +146,4 @@ function escapeXml(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
-}
-
-async function getOrCreateConversation(businessId: string, clientPhone: string) {
-  let conversation = await prisma.conversation.findUnique({
-    where: {
-      businessId_clientPhone: {
-        businessId,
-        clientPhone,
-      },
-    },
-  });
-
-  if (!conversation) {
-    conversation = await prisma.conversation.create({
-      data: {
-        businessId,
-        clientPhone,
-        state: 'GREETING',
-        context: {},
-      },
-    });
-  }
-
-  return conversation;
 }

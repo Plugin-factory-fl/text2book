@@ -4,12 +4,20 @@ import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { ChiefAvatar } from './chief-avatar';
 
+interface ChatAction {
+  id: string;
+  label: string;
+  kind?: string;
+}
+
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
   pending?: boolean;
+  notificationId?: string;
+  actions?: ChatAction[];
 }
 
 interface ClientContext {
@@ -53,6 +61,40 @@ export function AssistantChat({ clientContext, onActionComplete }: AssistantChat
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    const loadNotifications = async () => {
+      try {
+        const response = await fetch('/api/owner-notifications');
+        if (!response.ok) return;
+        const data = await response.json();
+        const pending = (data.notifications || []) as Array<{
+          id: string;
+          body: string;
+          createdAt: string;
+          actions?: ChatAction[];
+        }>;
+        if (pending.length === 0) return;
+        setMessages((prev) => {
+          const existing = new Set(prev.map((m) => m.notificationId));
+          const extras = pending
+            .filter((n) => !existing.has(n.id))
+            .map((n) => ({
+              id: `note-${n.id}`,
+              role: 'assistant' as const,
+              content: n.body,
+              timestamp: new Date(n.createdAt),
+              notificationId: n.id,
+              actions: n.actions,
+            }));
+          return extras.length ? [...prev, ...extras] : prev;
+        });
+      } catch {
+        // ignore
+      }
+    };
+    loadNotifications();
+  }, []);
 
   useEffect(() => {
     if (clientContext) {
@@ -139,6 +181,37 @@ export function AssistantChat({ clientContext, onActionComplete }: AssistantChat
     }
   };
 
+  const handleNotificationAction = async (message: Message, actionId: string) => {
+    if (!message.notificationId) return;
+    setIsLoading(true);
+    try {
+      await fetch('/api/owner-notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: message.notificationId, action: actionId }),
+      });
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === message.id
+            ? {
+                ...m,
+                actions: undefined,
+                content:
+                  actionId === 'yes'
+                    ? `${m.content}\n\nRecorded as paid in person. Lifetime revenue is updated.`
+                    : actionId === 'no'
+                      ? `${m.content}\n\nMarked outstanding. I can draft a reminder next.`
+                      : `${m.content}\n\nDone.`,
+              }
+            : m
+        )
+      );
+      onActionComplete?.();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handlePromptClick = (prompt: string) => {
     setInput(prompt);
     inputRef.current?.focus();
@@ -181,7 +254,28 @@ export function AssistantChat({ clientContext, onActionComplete }: AssistantChat
                   />
                 </div>
               ) : (
-                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                <>
+                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                  {message.actions && message.actions.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {message.actions.map((action) => (
+                        <button
+                          key={action.id}
+                          type="button"
+                          disabled={isLoading}
+                          onClick={() => handleNotificationAction(message, action.id)}
+                          className={
+                            action.kind === 'no'
+                              ? 'px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-700 hover:bg-gray-50'
+                              : 'px-3 py-1 text-xs rounded-full bg-blue-600 text-white hover:bg-blue-700'
+                          }
+                        >
+                          {action.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>

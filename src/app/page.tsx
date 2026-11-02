@@ -49,7 +49,7 @@ export default async function HomePage() {
           </Link>
         </div>
         <p className="mt-4 text-sm text-gray-500">
-          $19.99/month after trial. No credit card required to start.
+          Plans from $19.99 per month after trial. No credit card required to start.
         </p>
 
         <div className="mt-20 grid md:grid-cols-3 gap-8">
@@ -118,6 +118,21 @@ export default async function HomePage() {
               Confirmations and reminders sent automatically. Reduce no shows.
             </p>
           </div>
+        </div>
+
+        <div className="mt-20 grid md:grid-cols-3 gap-6 text-left">
+          {[
+            { name: 'Starter', price: '$19.99', segs: '500 text segments' },
+            { name: 'Growth', price: '$29.99', segs: '850 text segments' },
+            { name: 'Pro', price: '$39.99', segs: '1200 text segments' },
+          ].map((plan) => (
+            <div key={plan.name} className="p-6 bg-white rounded-2xl border border-gray-100 shadow-sm">
+              <h3 className="text-lg font-semibold text-gray-900">{plan.name}</h3>
+              <p className="text-2xl font-bold text-blue-600 mt-2">{plan.price}<span className="text-sm font-normal text-gray-500"> per month</span></p>
+              <p className="text-sm text-gray-600 mt-2">{plan.segs} inbound plus outbound</p>
+              <p className="text-sm text-gray-500 mt-2">Priced so gross margin stays at least 50%.</p>
+            </div>
+          ))}
         </div>
 
         <div className="mt-20 p-8 bg-white rounded-2xl shadow-lg border border-gray-100">

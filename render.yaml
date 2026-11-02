@@ -43,6 +43,12 @@ services:
         sync: false
       - key: STRIPE_PRICE_ID
         sync: false
+      - key: STRIPE_PRICE_ID_STARTER
+        sync: false
+      - key: STRIPE_PRICE_ID_GROWTH
+        sync: false
+      - key: STRIPE_PRICE_ID_PRO
+        sync: false
       - key: APP_URL
         sync: false
       - key: TRIAL_DAYS

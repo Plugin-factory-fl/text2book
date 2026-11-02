@@ -19,6 +19,7 @@ interface Booking {
   startTime: string;
   status: string;
   depositStatus?: string;
+  paymentStatus?: string;
 }
 
 interface Conversation {
@@ -167,6 +168,7 @@ export function ConversationList({
           );
           const pendingBooking = conv.bookings?.find((b) => b.depositStatus === 'PENDING');
           const depositIcon = getDepositIcon(upcomingBooking || pendingBooking);
+          const outstanding = conv.bookings?.some((b) => b.paymentStatus === 'OUTSTANDING');
 
           return (
             <button
@@ -210,6 +212,11 @@ export function ConversationList({
                   {depositIcon && (
                     <span className="text-sm" title={depositIcon.label}>
                       {depositIcon.icon}
+                    </span>
+                  )}
+                  {outstanding && (
+                    <span className="text-xs text-red-700 bg-red-50 px-1.5 py-0.5 rounded">
+                      Outstanding
                     </span>
                   )}
                 </div>

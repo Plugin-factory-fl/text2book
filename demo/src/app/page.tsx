@@ -56,6 +56,20 @@ export default function HomePage() {
             </Link>
           </div>
 
+          <div className="grid md:grid-cols-3 gap-4 mb-8 text-left">
+            {[
+              { name: 'Starter', price: '$19.99', segs: '500 text segments' },
+              { name: 'Growth', price: '$29.99', segs: '850 text segments' },
+              { name: 'Pro', price: '$39.99', segs: '1200 text segments' },
+            ].map((plan) => (
+              <div key={plan.name} className="bg-white rounded-2xl shadow p-5">
+                <h3 className="font-semibold text-gray-900">{plan.name}</h3>
+                <p className="text-xl font-bold text-blue-600 mt-1">{plan.price}<span className="text-sm font-normal text-gray-500"> per month</span></p>
+                <p className="text-sm text-gray-600 mt-1">{plan.segs}</p>
+              </div>
+            ))}
+          </div>
+
           <div className="bg-white rounded-2xl shadow-xl p-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">
               Onboarding Preview

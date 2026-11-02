@@ -17,6 +17,8 @@ interface Booking {
   depositRequired?: boolean;
   depositAmount?: number | null;
   depositStatus?: string;
+  paymentStatus?: string;
+  remainderAmount?: number | null;
 }
 
 interface ClientStats {
@@ -41,8 +43,13 @@ interface ClientInfoPanelProps {
   onCancel?: (bookingId: string) => void;
   onSendReminder?: (bookingId: string) => void;
   onRequestDeposit?: (bookingId: string) => void;
+  onMarkPaid?: (bookingId: string) => void;
+  onMarkOutstanding?: (bookingId: string) => void;
   notes?: string | null;
   calendarSynced?: boolean;
+  outstandingCents?: number;
+  auditLogs?: Array<{ id: string; action: string; summary: string; createdAt: string }>;
+  waitlistEntries?: Array<{ id: string; serviceName?: string | null; status: string; preferredDate?: string | null }>;
 }
 
 function formatPhoneNumber(phone: string): string {
@@ -93,6 +100,8 @@ function BookingCard({
   onCancel,
   onSendReminder,
   onRequestDeposit,
+  onMarkPaid,
+  onMarkOutstanding,
 }: {
   booking: Booking;
   label: string;
@@ -100,6 +109,8 @@ function BookingCard({
   onCancel?: (id: string) => void;
   onSendReminder?: (id: string) => void;
   onRequestDeposit?: (id: string) => void;
+  onMarkPaid?: (id: string) => void;
+  onMarkOutstanding?: (id: string) => void;
 }) {
   return (
     <div className="bg-gray-50 rounded-lg p-3 space-y-2">
@@ -166,6 +177,22 @@ function BookingCard({
             Request Deposit
           </button>
         )}
+        {booking.paymentStatus !== 'PAID' && onMarkPaid && (
+          <button
+            onClick={() => onMarkPaid(booking.id)}
+            className="text-xs px-2 py-1 bg-green-100 border border-green-300 rounded hover:bg-green-200 transition-colors text-green-700"
+          >
+            Mark paid in person
+          </button>
+        )}
+        {booking.paymentStatus !== 'OUTSTANDING' && booking.paymentStatus !== 'PAID' && onMarkOutstanding && (
+          <button
+            onClick={() => onMarkOutstanding(booking.id)}
+            className="text-xs px-2 py-1 bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+          >
+            Mark outstanding
+          </button>
+        )}
       </div>
     </div>
   );
@@ -184,8 +211,13 @@ export function ClientInfoPanel({
   onCancel,
   onSendReminder,
   onRequestDeposit,
+  onMarkPaid,
+  onMarkOutstanding,
   notes,
   calendarSynced = false,
+  outstandingCents = 0,
+  auditLogs = [],
+  waitlistEntries = [],
 }: ClientInfoPanelProps) {
   return (
     <div className="h-full min-h-0 overflow-y-auto bg-white border-l border-gray-200">
@@ -224,6 +256,11 @@ export function ClientInfoPanel({
               📅 Calendar synced
             </span>
           )}
+          {outstandingCents > 0 && (
+            <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700">
+              Outstanding ${ (outstandingCents / 100).toFixed(2) }
+            </span>
+          )}
         </div>
       </div>
 
@@ -236,6 +273,8 @@ export function ClientInfoPanel({
             onCancel={onCancel}
             onSendReminder={onSendReminder}
             onRequestDeposit={onRequestDeposit}
+            onMarkPaid={onMarkPaid}
+            onMarkOutstanding={onMarkOutstanding}
           />
         )}
 
@@ -247,6 +286,8 @@ export function ClientInfoPanel({
             onCancel={onCancel}
             onSendReminder={onSendReminder}
             onRequestDeposit={onRequestDeposit}
+            onMarkPaid={onMarkPaid}
+            onMarkOutstanding={onMarkOutstanding}
           />
         )}
 
@@ -296,6 +337,33 @@ export function ClientInfoPanel({
           <div className="border-t border-gray-200 pt-4">
             <h3 className="text-sm font-medium text-gray-900 mb-2">Notes</h3>
             <p className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3">{notes}</p>
+          </div>
+        )}
+
+        {waitlistEntries.length > 0 && (
+          <div className="border-t border-gray-200 pt-4">
+            <h3 className="text-sm font-medium text-gray-900 mb-2">Waitlist</h3>
+            <div className="space-y-2">
+              {waitlistEntries.map((entry) => (
+                <div key={entry.id} className="bg-amber-50 rounded-lg p-3 text-sm text-amber-900">
+                  {entry.serviceName || 'Any service'} · {entry.status}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {auditLogs.length > 0 && (
+          <div className="border-t border-gray-200 pt-4">
+            <h3 className="text-sm font-medium text-gray-900 mb-2">AI action log</h3>
+            <div className="space-y-2">
+              {auditLogs.slice(0, 8).map((log) => (
+                <div key={log.id} className="bg-gray-50 rounded-lg p-2">
+                  <p className="text-xs text-gray-500">{format(new Date(log.createdAt), 'MMM d, h:mm a')}</p>
+                  <p className="text-sm text-gray-800">{log.summary}</p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

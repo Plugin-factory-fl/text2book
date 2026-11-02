@@ -270,6 +270,8 @@ async function generateAIResponse(
             clientName: client_name,
             clientPhone: conversationContext.clientPhone,
             startTime,
+            createdByAi: true,
+            requireYesConfirm: true,
           });
 
           if (bookingResult.success && bookingResult.booking) {
@@ -285,7 +287,7 @@ async function generateAIResponse(
               
               functionResult = `Slot held for ${service.name} on ${format(startTime, 'EEEE, MMMM d')} at ${format(startTime, 'h:mm a')} for ${client_name}. A $${depositDollars.toFixed(0)} deposit is required to confirm. Please pay within ${holdMinutes} minutes: ${bookingResult.depositUrl} ${policyText}`;
             } else {
-              functionResult = `Booking confirmed! ${service.name} on ${format(startTime, 'EEEE, MMMM d')} at ${format(startTime, 'h:mm a')} for ${client_name}.`;
+              functionResult = `Slot held for ${service.name} on ${format(startTime, 'EEEE, MMMM d')} at ${format(startTime, 'h:mm a')} for ${client_name}. Ask them to reply YES to confirm.`;
             }
           } else {
             functionResult = bookingResult.error || 'Failed to create booking. The time slot may no longer be available.';
@@ -358,6 +360,34 @@ async function generateAIResponse(
 
       case 'escalate_to_owner': {
         functionResult = 'I will have the owner get back to you shortly.';
+        break;
+      }
+
+      case 'join_waitlist': {
+        const { service_name, preferred_date, window_start, window_end } = functionArgs;
+        const { joinWaitlist } = await import('./waitlist');
+        const service = service_name
+          ? businessContext.services.find((s) => s.name.toLowerCase() === String(service_name).toLowerCase())
+          : undefined;
+        let preferredDate: Date | undefined;
+        if (preferred_date) {
+          try {
+            preferredDate = parseISO(preferred_date);
+          } catch {
+            preferredDate = parseFuzzyDate(preferred_date);
+          }
+        }
+        const entry = await joinWaitlist({
+          businessId: businessContext.business.id,
+          clientPhone: conversationContext.clientPhone,
+          clientName: conversationContext.clientName,
+          serviceId: service?.id,
+          serviceName: service?.name || service_name,
+          preferredDate,
+          windowStart: window_start,
+          windowEnd: window_end,
+        });
+        functionResult = `Added to the waitlist at position ${entry.position}. They will be texted if a matching slot opens.`;
         break;
       }
 

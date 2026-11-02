@@ -5,63 +5,76 @@ import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
+import { PLAN_TIER_LIST, PlanTierId, planPublicCopy } from '@/config/pricing';
+
+interface UsagePayload {
+  tier: PlanTierId;
+  used: number;
+  cap: number;
+  inboundSegments: number;
+  outboundSegments: number;
+  periodEnd: string;
+}
 
 interface Subscription {
   status: string;
   trialEndsAt: string | null;
-  currentPeriodStart: string | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
+  tier?: PlanTierId;
 }
 
 function BillingContent() {
   const searchParams = useSearchParams();
   const subscriptionStatus = searchParams.get('subscription');
-
   const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [usage, setUsage] = useState<UsagePayload | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    fetchSubscription();
+    fetchUsage();
   }, []);
 
   useEffect(() => {
     if (subscriptionStatus === 'success') {
       setMessage('Subscription activated successfully!');
-      fetchSubscription();
+      fetchUsage();
     } else if (subscriptionStatus === 'cancelled') {
       setMessage('Checkout was cancelled.');
     }
   }, [subscriptionStatus]);
 
-  const fetchSubscription = async () => {
+  const fetchUsage = async () => {
     try {
-      const response = await fetch('/api/business');
+      const response = await fetch('/api/usage');
       if (response.ok) {
         const data = await response.json();
-        if (data.business) {
-          const userResponse = await fetch('/api/auth/session');
-          if (userResponse.ok) {
-            // Re-fetch with subscription data
-          }
-        }
+        setUsage(data);
+        setSubscription({
+          status: 'ACTIVE',
+          trialEndsAt: null,
+          currentPeriodEnd: data.periodEnd,
+          cancelAtPeriodEnd: false,
+          tier: data.tier,
+        });
       }
     } catch (error) {
-      console.error('Failed to fetch subscription:', error);
+      console.error('Failed to fetch usage:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSubscribe = async () => {
+  const handleSubscribe = async (tier: PlanTierId) => {
     setIsProcessing(true);
     try {
       const response = await fetch('/api/billing/checkout', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tier }),
       });
-
       if (response.ok) {
         const data = await response.json();
         window.location.href = data.url;
@@ -69,7 +82,7 @@ function BillingContent() {
         const data = await response.json();
         setMessage(data.error || 'Failed to create checkout session');
       }
-    } catch (error) {
+    } catch {
       setMessage('An error occurred');
     } finally {
       setIsProcessing(false);
@@ -79,10 +92,7 @@ function BillingContent() {
   const handleManageBilling = async () => {
     setIsProcessing(true);
     try {
-      const response = await fetch('/api/billing/portal', {
-        method: 'POST',
-      });
-
+      const response = await fetch('/api/billing/portal', { method: 'POST' });
       if (response.ok) {
         const data = await response.json();
         window.location.href = data.url;
@@ -90,52 +100,11 @@ function BillingContent() {
         const data = await response.json();
         setMessage(data.error || 'Failed to open billing portal');
       }
-    } catch (error) {
+    } catch {
       setMessage('An error occurred');
     } finally {
       setIsProcessing(false);
     }
-  };
-
-  const handleCancel = async () => {
-    if (
-      !confirm(
-        'Are you sure you want to cancel your subscription? You will retain access until the end of your billing period.'
-      )
-    ) {
-      return;
-    }
-
-    setIsProcessing(true);
-    try {
-      const response = await fetch('/api/billing/cancel', {
-        method: 'POST',
-      });
-
-      if (response.ok) {
-        setMessage('Subscription will be cancelled at the end of the billing period.');
-        fetchSubscription();
-      } else {
-        const data = await response.json();
-        setMessage(data.error || 'Failed to cancel subscription');
-      }
-    } catch (error) {
-      setMessage('An error occurred');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const getStatusDisplay = (status: string) => {
-    const displays: Record<string, { label: string; color: string }> = {
-      TRIAL: { label: 'Free Trial', color: 'bg-blue-100 text-blue-800' },
-      ACTIVE: { label: 'Active', color: 'bg-green-100 text-green-800' },
-      PAST_DUE: { label: 'Past Due', color: 'bg-red-100 text-red-800' },
-      CANCELLED: { label: 'Cancelled', color: 'bg-gray-100 text-gray-800' },
-      INCOMPLETE: { label: 'Incomplete', color: 'bg-yellow-100 text-yellow-800' },
-    };
-
-    return displays[status] || { label: status, color: 'bg-gray-100 text-gray-800' };
   };
 
   if (isLoading) {
@@ -146,147 +115,95 @@ function BillingContent() {
     );
   }
 
+  const currentTier = usage?.tier || 'STARTER';
+  const used = usage?.used || 0;
+  const cap = usage?.cap || 500;
+  const percent = Math.min(100, Math.round((used / cap) * 100));
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Billing</h1>
         <p className="text-gray-600 mt-1">
-          Manage your subscription and payment methods
+          Choose a plan by monthly text volume. Gross margin stays at least 50%.
         </p>
       </div>
 
       {message && (
-        <div
-          className={`p-4 rounded-lg ${
-            message.includes('success') || message.includes('activated')
-              ? 'bg-green-50 text-green-800 border border-green-200'
-              : 'bg-amber-50 text-amber-800 border border-amber-200'
-          }`}
-        >
+        <div className="p-4 rounded-lg bg-amber-50 text-amber-800 border border-amber-200">
           {message}
         </div>
       )}
 
       <Card>
         <CardHeader>
-          <div className="flex justify-between items-center">
-            <h2 className="text-lg font-semibold">Current Plan</h2>
-            {subscription && (
-              <span
-                className={`px-3 py-1 text-sm font-medium rounded-full ${
-                  getStatusDisplay(subscription.status).color
-                }`}
-              >
-                {getStatusDisplay(subscription.status).label}
-              </span>
-            )}
-          </div>
+          <h2 className="text-lg font-semibold">This month usage</h2>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <div>
-              <h3 className="text-2xl font-bold text-gray-900">
-                Text2Book Pro
-              </h3>
-              <p className="text-3xl font-bold text-blue-600 mt-2">
-                $19.99<span className="text-lg text-gray-500 font-normal">/month</span>
-              </p>
-            </div>
-
-            <ul className="space-y-2 text-sm text-gray-600">
-              <li className="flex items-center gap-2">
-                <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                Dedicated phone number
-              </li>
-              <li className="flex items-center gap-2">
-                <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                AI booking assistant
-              </li>
-              <li className="flex items-center gap-2">
-                <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                Google Calendar sync
-              </li>
-              <li className="flex items-center gap-2">
-                <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                Automatic confirmations and reminders
-              </li>
-              <li className="flex items-center gap-2">
-                <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                Up to 500 SMS per month
-              </li>
-            </ul>
-
-            {subscription?.trialEndsAt && subscription.status === 'TRIAL' && (
-              <div className="p-4 bg-blue-50 rounded-lg">
-                <p className="text-sm text-blue-800">
-                  Your free trial ends on{' '}
-                  <span className="font-semibold">
-                    {format(new Date(subscription.trialEndsAt), 'MMMM d, yyyy')}
-                  </span>
-                </p>
-              </div>
-            )}
-
-            {subscription?.currentPeriodEnd && subscription.status === 'ACTIVE' && (
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600">
-                  {subscription.cancelAtPeriodEnd
-                    ? 'Your subscription will end on '
-                    : 'Your next billing date is '}
-                  <span className="font-semibold">
-                    {format(new Date(subscription.currentPeriodEnd), 'MMMM d, yyyy')}
-                  </span>
-                </p>
-              </div>
-            )}
-
-            <div className="flex gap-3 pt-4">
-              {(!subscription || subscription.status === 'TRIAL' || subscription.status === 'CANCELLED') && (
-                <Button onClick={handleSubscribe} isLoading={isProcessing}>
-                  Subscribe Now
-                </Button>
-              )}
-
-              {subscription?.status === 'ACTIVE' && (
-                <>
-                  <Button
-                    variant="outline"
-                    onClick={handleManageBilling}
-                    isLoading={isProcessing}
-                  >
-                    Manage Payment
-                  </Button>
-                  {!subscription.cancelAtPeriodEnd && (
-                    <Button
-                      variant="ghost"
-                      onClick={handleCancel}
-                      disabled={isProcessing}
-                    >
-                      Cancel Subscription
-                    </Button>
-                  )}
-                </>
-              )}
-
-              {subscription?.status === 'PAST_DUE' && (
-                <Button onClick={handleManageBilling} isLoading={isProcessing}>
-                  Update Payment Method
-                </Button>
-              )}
-            </div>
+          <p className="text-sm text-gray-600 mb-2">
+            {used} of {cap} text segments on {currentTier}
+          </p>
+          <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className={percent >= 100 ? 'h-full bg-red-500' : percent >= 80 ? 'h-full bg-amber-500' : 'h-full bg-blue-600'}
+              style={{ width: `${percent}%` }}
+            />
           </div>
+          {percent >= 80 && (
+            <p className="text-sm text-amber-700 mt-2">
+              {percent >= 100
+                ? 'Allowance reached. Upgrade or contact us for overage. In progress bookings stay open.'
+                : 'You have used 80% or more of this month texts. Upgrade to keep conversations flowing.'}
+            </p>
+          )}
         </CardContent>
       </Card>
+
+      <div className="grid md:grid-cols-3 gap-4">
+        {PLAN_TIER_LIST.map((plan) => {
+          const copy = planPublicCopy(plan);
+          const isCurrent = plan.id === currentTier;
+          return (
+            <Card key={plan.id} className={isCurrent ? 'border-blue-400' : ''}>
+              <CardHeader>
+                <h2 className="text-lg font-semibold">{copy.name}</h2>
+                {isCurrent && (
+                  <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700">Current plan</span>
+                )}
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold text-blue-600">{copy.priceLabel}</p>
+                <p className="text-sm text-gray-600 mt-1">{copy.segmentsLabel}</p>
+                <ul className="mt-4 space-y-2 text-sm text-gray-600">
+                  {copy.features.map((feature) => (
+                    <li key={feature}>{feature}</li>
+                  ))}
+                </ul>
+                <div className="mt-4">
+                  {isCurrent ? (
+                    <Button variant="outline" onClick={handleManageBilling} isLoading={isProcessing}>
+                      Manage payment
+                    </Button>
+                  ) : (
+                    <Button onClick={() => handleSubscribe(plan.id)} isLoading={isProcessing}>
+                      {PLAN_TIER_LIST.findIndex((p) => p.id === plan.id) >
+                      PLAN_TIER_LIST.findIndex((p) => p.id === currentTier)
+                        ? `Upgrade to ${plan.name}`
+                        : `Choose ${plan.name}`}
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {subscription?.currentPeriodEnd && (
+        <p className="text-sm text-gray-500">
+          Current period ends {format(new Date(subscription.currentPeriodEnd), 'MMMM d, yyyy')}
+        </p>
+      )}
     </div>
   );
 }

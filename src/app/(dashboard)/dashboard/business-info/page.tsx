@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BusinessAutofill } from '@/components/dashboard/business-autofill';
+import { CsvImport } from '@/components/dashboard/csv-import';
 
 interface FAQ {
   id: string;
@@ -158,6 +159,8 @@ export default function BusinessInfoPage() {
           onApplied={fetchPageData}
         />
       )}
+
+      <CsvImport />
 
       {showForm && (
         <Card>

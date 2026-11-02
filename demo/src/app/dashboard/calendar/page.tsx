@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { formatPhoneNumber, formatCurrency, formatDuration } from '@/lib/utils';
-import { mockBookings } from '@/data/mock-data';
+import { mockBookings, mockWaitlist } from '@/data/mock-data';
 import { BookingCalendar, BookingDetailModal, CalendarBooking } from '@/components/ui/booking-calendar';
 
 type ViewTab = 'calendar' | 'list';
@@ -87,6 +87,25 @@ export default function CalendarPage() {
           </button>
         </div>
       </div>
+
+      <Card>
+        <CardContent className="py-4">
+          <h2 className="text-lg font-semibold text-gray-900 mb-3">Waitlist</h2>
+          <div className="space-y-2">
+            {mockWaitlist.map((entry) => (
+              <div key={entry.id} className="flex items-center justify-between text-sm">
+                <div>
+                  <p className="font-medium text-gray-900">{entry.clientName}</p>
+                  <p className="text-gray-500">
+                    {entry.serviceName} · {entry.windowStart} to {entry.windowEnd}
+                  </p>
+                </div>
+                <span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-800">{entry.status}</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {viewTab === 'calendar' ? (
         <>
